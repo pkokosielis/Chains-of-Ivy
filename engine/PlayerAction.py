@@ -24,7 +24,10 @@ class PlayerAction:
       self.restoreRequested = "True"
 
    def getAction(self, action):
-      self.action = action #iowInput(">>: ")
+      if (iowGetViewer() != None):
+         self.action = action 
+      else:
+         iowInput(">>: ")
       
    def getActionType(self):
       self.type = "Bad" 

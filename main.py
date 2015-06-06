@@ -81,8 +81,8 @@ def main():
             savedState = nextAction.doRestore(currentRoom, player)
             currentRoom = savedState[0]
             player = savedState[1]
- 
-         currentRoom = nextAction.doAction(currentRoom, player)
+         action = None
+         currentRoom = nextAction.doAction(currentRoom, player, action)
            
       # Player died. Restore or quit?
       

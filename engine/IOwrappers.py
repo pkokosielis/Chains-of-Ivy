@@ -11,13 +11,18 @@ def iowSetInput(iObject):
    global iField 
    iField = iObject
 
+def iowGetViewer():
+   return viewer
+
 def iowSetViewer(vObject):
    global viewer
    viewer = vObject
 
 def iowPrint(msg):
-   iowPrintViewer(msg)
-      #print (msg)
+   if (viewer != None):
+   	iowPrintViewer(msg)
+   else:
+      print (msg)
 
 def iowPrintViewer(msg):
    global viewer
