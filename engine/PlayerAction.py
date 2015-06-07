@@ -27,7 +27,7 @@ class PlayerAction:
       if (iowGetViewer() != None):
          self.action = action 
       else:
-         iowInput(">>: ")
+         self.action = iowInput(">>: ")
       
    def getActionType(self):
       self.type = "Bad" 
@@ -238,7 +238,7 @@ class PlayerAction:
    def doAction(self, room, character, action):
       self.getAction(action)
       self.getActionType()
-        
+
       if self.type == "Bad":
          iowPrint ("I don't understand your command. Try Again.")
 

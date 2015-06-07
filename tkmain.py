@@ -125,7 +125,7 @@ def main():
    root.config(menu=menubar)
 
    #viewer
-   actionViewer = tkst.ScrolledText(mainframe, state='normal', width=80, height=24, wrap='none')
+   actionViewer = tkst.ScrolledText(mainframe, state='normal', width=85, height=24, wrap='none')
    actionViewer.grid(column=2, row=1, sticky=(W,E))
    actionViewer.vbar.config(command=actionViewer.yview)
    actionViewer['state'] = 'disabled'
@@ -145,7 +145,7 @@ def main():
 
    #graphics viewer
    bannerLabel = ttk.Label(mainframe, text="")
-   banner = PhotoImage(file="/home/peterk/Programs/python/chainsOfIvy.gif")
+   banner = PhotoImage(file="img/chainsOfIvy.gif")
    bannerLabel['image'] = banner
    bannerLabel.grid(column=1, row=1, sticky=(W,E))
 
