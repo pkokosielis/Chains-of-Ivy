@@ -23,3 +23,7 @@ readMonsters()
 
 iowDebugPrint(debugMonster, "[DEBUG_MONSTERS]")
 iowDebugPrint(debugMonster, StockMonsterList)
+
+# boss monsters
+drunkenLudwig = Monster(["drunken rebel Ludwig", 18, 7, "swings hot poker", 40, None, 25], None)
+ 

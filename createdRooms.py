@@ -66,4 +66,11 @@ iowDebugPrint (debugRooms, RoomArray)
 # NPCs
 (getRoomWithID(5)).addNPCtoRoom(roxHorseE)
 (getRoomWithID(6)).addNPCtoRoom(roxHorseW)
-(getRoomWithID(7)).addNPCtoRoom(ttcAutomaton) 
+(getRoomWithID(7)).addNPCtoRoom(ttcAutomaton)
+(getRoomWithID(7)).blockDirection("Down")
+
+
+#Monsters
+drunkenLudwig.addItems([ttcPass])
+(getRoomWithID(6)).addMonsterToRoom(drunkenLudwig)
+

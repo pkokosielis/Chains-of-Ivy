@@ -16,7 +16,7 @@ ttcPass.setQuestForNPC(ttcAutomaton)
 crow = NPC("An ominous crow", 0, 0)
 
 roxHorseE = NPC("A mechanical horse emanating steam", 0, 0)
-roxHorseE.addQuoteBeforeQuest("I can take you west to the Rebelion House on Yonge")
+roxHorseE.addQuoteBeforeQuest("I can take you west to the Rebellion House on Yonge")
 roxHorseE.addQuoteBeforeQuest("Are you going west? I will shuttle you along Roxborough street.")
 
 roxHorseW = NPC("A mechanical horse emanating steam", 0, 0)
