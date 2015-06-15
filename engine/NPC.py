@@ -37,7 +37,7 @@ class NPC:
    def addQuoteAfterQuest(self, quote):
       self.afterQuestComm.append(quote)
 
-   def sayQuote(self, character):
+   def sayQuote(self, character, room):
       if (self.getQuestFulfilledStatus() == "Pending"):
          for item in character.inventory:
             if item.npcRequestor == self:
@@ -49,6 +49,7 @@ class NPC:
          iowPrint ("Gold +" + str(self.getGoldToGive()))
          character.incrementExperience(self.getExpToGive())
          character.incrementGold(self.getGoldToGive())
+         room.unBlockAllDirections()
 
       elif (self.getQuestFulfilledStatus() == "True"):
          if self.afterQuestComm:

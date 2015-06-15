@@ -191,7 +191,7 @@ class PlayerAction:
       elif self.action == "talk":
          if room.npc:
             for npc in room.npc:
-               npc.sayQuote(character)
+               npc.sayQuote(character, room)
          else:
             iowPrint ("You mutter to yourself bitterly.")
 
