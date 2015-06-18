@@ -85,7 +85,7 @@ class PlayerAction:
       iowPrint ("save - save current game")
       iowPrint ("restore - restore the saved game")
       iowPrint ("quit - quit the game")
-      iowPrint ("help - iowPrint this message") 
+      iowPrint ("help - Print this message") 
 
    def doSaveTk(self, room, character, fileName):
       with open(fileName, 'wb') as output:
@@ -212,7 +212,7 @@ class PlayerAction:
             weaponStr = "bare hands"
             if character.weapon != None:
                weaponStr = character.weapon.getName() 
-            iowPrint ("You attack the " + target.getName() + " with your " + weaponStr \
+            iowWrapPrint ("You attack the " + target.getName() + " with your " + weaponStr \
                   + " and inflict " + str(characterAttack) + " damage points.") 
             target.subtractFromHP(characterAttack)
             if (target.getStatus() == "Dead"):
@@ -225,9 +225,9 @@ class PlayerAction:
             else:
                amountAttacked = target.getAttackAmount() - character.getArmorClass()
                if (amountAttacked <= 0):
-                  iowPrint ("The " + target.getName() + " missed!")
+                  iowWrapPrint ("The " + target.getName() + " missed!")
                else:
-                  iowPrint ("The " + target.getName() + " " + target.getAttackType() + " and causes " + str(amountAttacked) + " damage points!")
+                  iowWrapPrint ("The " + target.getName() + " " + target.getAttackType() + " and causes " + str(amountAttacked) + " damage points!")
                   character.hp -= amountAttacked
                   if (character.hp <= 0):
                      iowPrint ("You have perished in battle!")

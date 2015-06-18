@@ -1,3 +1,4 @@
+import textwrap
 import sys
 from tkinter import *
 
@@ -23,6 +24,16 @@ def iowPrint(msg):
    	iowPrintViewer(msg)
    else:
       print (msg)
+
+def iowWrapPrint(msg):
+   if (viewer != None):
+      dedented_text = textwrap.dedent(msg).strip()
+      iowPrint (textwrap.fill(dedented_text, 80))
+      iowPrint ("\n")
+ 
+   else:
+      print (msg)
+
 
 def iowPrintViewer(msg):
    global viewer

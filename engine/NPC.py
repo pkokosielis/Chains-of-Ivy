@@ -42,25 +42,25 @@ class NPC:
          for item in character.inventory:
             if item.npcRequestor == self:
                character.removeItem(item)
-         iowPrint (self.Thanks)
+         iowWrapPrint (self.Thanks)
          self.setQuestFulfilled()
-         iowPrint ("For helping " + self.getName() + " you gain:")
-         iowPrint ("Experience +" + str(self.getExpToGive()))
-         iowPrint ("Gold +" + str(self.getGoldToGive()))
+         iowWrapPrint ("For helping " + self.getName() + " you gain:")
+         iowWrapPrint ("Experience +" + str(self.getExpToGive()))
+         iowWrapPrint ("Gold +" + str(self.getGoldToGive()))
          character.incrementExperience(self.getExpToGive())
          character.incrementGold(self.getGoldToGive())
          room.unBlockAllDirections()
 
       elif (self.getQuestFulfilledStatus() == "True"):
          if self.afterQuestComm:
-            iowPrint (choice(self.afterQuestComm))
+            iowWrapPrint (choice(self.afterQuestComm))
          else:
-            iowPrint (self.getName() + "'s silence is deafening.")
+            iowWrapPrint (self.getName() + "'s silence is deafening.")
       else:
          if self.beforeQuestComm:
-            iowPrint (choice(self.beforeQuestComm))
+            iowWrapPrint (choice(self.beforeQuestComm))
          else:
-            iowPrint (self.getName() + "'s silence is deafening.")
+            iowWrapPrint (self.getName() + "'s silence is deafening.")
 
    def getGoldToGive(self):
       return self.goldToGive
@@ -75,5 +75,5 @@ class NPC:
       if self.itemsToGive:
          for item in self.itemsToGive:
             self.itemsToGive.remove(item)
-            iowPrint (self.getName() + " presents to you a " + item.getName() + ".")
+            iowWrapPrint (self.getName() + " presents to you a " + item.getName() + ".")
             room.addItemToRoom(item)

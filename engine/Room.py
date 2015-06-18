@@ -1,4 +1,3 @@
-import textwrap
 from random import randint
 from random import choice
 
@@ -81,9 +80,7 @@ class Room:
    def displayRoom(self):
       iowPrint ("\n" + self.getTitle())
       iowPrint ("____________________________________")
-      dedented_text = textwrap.dedent(self.description).strip()
-      iowPrint (textwrap.fill(dedented_text, 80))
-      iowPrint ("\n")
+      iowWrapPrint (self.description)
       if self.npc:
          for npc in self.npc:
             iowPrint (npc.getName() + " is here.")
