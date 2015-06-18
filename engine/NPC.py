@@ -47,6 +47,7 @@ class NPC:
          iowWrapPrint ("For helping " + self.getName() + " you gain:")
          iowWrapPrint ("Experience +" + str(self.getExpToGive()))
          iowWrapPrint ("Gold +" + str(self.getGoldToGive()))
+         self.giveItems(room) 
          character.incrementExperience(self.getExpToGive())
          character.incrementGold(self.getGoldToGive())
          room.unBlockAllDirections()
