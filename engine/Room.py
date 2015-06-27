@@ -25,6 +25,7 @@ class Room:
       self.down = None
       self.monsters = []
       self.npc = []
+      self.storeKeeper = None
       self.generatedMonsterList = generatedMonsterList
 
 
@@ -52,6 +53,9 @@ class Room:
 
    def addNPCtoRoom(self, npc):
       self.npc.append(npc)
+
+   def addStoreKeeperToRoom(self, storeKeeper):
+      self.storeKeeper = storeKeeper
 
    def existsItem(self, itemStr):
       for item in self.items:

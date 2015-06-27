@@ -172,6 +172,10 @@ class PlayerAction:
          itemDesc = self.action[4:]
          character.useItem(itemDesc)
 
+      elif self.action[:4] == "buy ":
+         itemDesc = self.action[4:]
+         room.storeKeeper.sellItem(itemDesc)
+
       elif self.action == "quit":
          self.doQuit()
 
@@ -192,6 +196,8 @@ class PlayerAction:
          if room.npc:
             for npc in room.npc:
                npc.sayQuote(character, room)
+         elif room.storeKeeper:
+            room.storeKeeper.listStoreItems()
          else:
             iowPrint ("You mutter to yourself bitterly.")
 
