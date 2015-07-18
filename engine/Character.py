@@ -59,6 +59,12 @@ class Character:
    def incrementGold(self, amount):
       self.gold += amount
 
+   def decrementGold(self, amount):
+      self.gold -= amount
+
+   def getGold(self):
+      return self.gold
+
    def getInventory(self):
       if self.inventory:
          iowPrint ("You are currently carrying:")

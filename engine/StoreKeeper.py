@@ -10,26 +10,55 @@ class StoreKeeper:
       self.name = name
       self.storeName = storeName
       self.itemsToSell = []
+      self.Welcome = ""
       self.Thanks = ""
+   
 
    def getName(self):
       return self.name
 
+   def setWelcomeMessage(self, msg):
+      self.Welcome = msg
+
+   def getWelcomeMessage(self):
+      return self.Welcome
+
    def setThanksMessage(self, msg):
       self.Thanks = msg
+ 
+   def getThanksMessage(self):
+      return self.Thanks
 
    def getStoreName(self):
       return self.storeName
 
    def listStoreItems(self, character, room):
+      iowWrapPrint (self.getWelcomeMessage())
       iowWrapPrint ("Avaiable for Sale at " + self.getStoreName())
-      for item in itemsToSell:
-         iowWrapPrint(item) 
+      iowWrapPrint ("-------------------------------------------")
+      for item in self.itemsToSell:
+         iowWrapPrint(" * " + item.getName() + "  [" + str(item.getItemValue()) + " gold]")
+      iowWrapPrint ("-------------------------------------------")
 
    def addItem(self, itemList):
       self.itemsToSell = itemList
 
-   def sellItem(self,item, room):
+   def existsItem(self, itemStr):
+      for item in self.itemsToSell:
+         if (item.getName() == itemStr):
+            return item
+      return None
+
+   def sellItem(self, itemStr, character, room):
+      item = self.existsItem(itemStr)
       if item in self.itemsToSell:
-            iowWrapPrint (self.getName() + " places a " + item.getName() + "on the counter for you to take.")
-            room.addItemToRoom(item)
+            if character.getGold() >= item.getItemValue():
+               iowWrapPrint (self.getName() + " sells you a " + item.getName())
+               character.decrementGold(item.getItemValue()) 
+               character.addToInventory(item) 
+               iowWrapPrint (self.getThanksMessage())
+            else:
+               iowPrint ("You can't afford a " + itemStr + " with only " + str(character.getGold()) + " gold pieces!" )
+      else:
+         iowPrint ("There is no " + itemStr + " available to buy!")
+

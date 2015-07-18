@@ -13,7 +13,7 @@ def showBanner():
 
 def initSetting():
    me = Character("Professor Hugo Lockchain")
-   me.setScrollText("The peaty taste of whiskey mystifies you.")
+   me.setScrollText("The drink of elixir mystifies you.")
 
    watch = Item("Gold pocket watch", "Weapon", 9)
    jacket = Item("Tweed blazer", "Suit", 9)

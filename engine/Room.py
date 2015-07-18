@@ -88,6 +88,8 @@ class Room:
       if self.npc:
          for npc in self.npc:
             iowPrint (npc.getName() + " is here.")
+      if self.storeKeeper:
+         iowPrint (self.storeKeeper.getName() + " is here.")
       if self.monsters:
          showFirstImageOnly = 0
          for monster in self.monsters:

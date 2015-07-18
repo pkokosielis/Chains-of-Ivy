@@ -42,7 +42,7 @@ class PlayerAction:
             self.action == "stats" or self.action == "talk" or
             self.action == "save" or self.action == "restore" or 
             self.action == "quit" or self.action[:4] == "use " or
-            self.action == "help"):
+            self.action[:4] == "buy " or self.action == "help"):
          self.type = "Admin"
 
       elif (self.action == "attack"):
@@ -80,6 +80,7 @@ class PlayerAction:
       iowPrint ("take [all | <item>] - take a specific item")
       iowPrint ("use <item> - use a specific item")
       iowPrint ("drop <item> - drop a specific item")
+      iowPrint ("buy <item> - buy item from storekeeper")
       iowPrint ("talk - talk to someone in the room")
       iowPrint ("attack - attack all enemies")
       iowPrint ("save - save current game")
@@ -174,7 +175,7 @@ class PlayerAction:
 
       elif self.action[:4] == "buy ":
          itemDesc = self.action[4:]
-         room.storeKeeper.sellItem(itemDesc)
+         room.storeKeeper.sellItem(itemDesc,character,room)
 
       elif self.action == "quit":
          self.doQuit()
@@ -197,7 +198,7 @@ class PlayerAction:
             for npc in room.npc:
                npc.sayQuote(character, room)
          elif room.storeKeeper:
-            room.storeKeeper.listStoreItems()
+            room.storeKeeper.listStoreItems(character, room)
          else:
             iowPrint ("You mutter to yourself bitterly.")
 

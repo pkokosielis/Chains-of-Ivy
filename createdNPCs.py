@@ -1,4 +1,5 @@
 from engine.NPC import * 
+from engine.StoreKeeper import *
 from createdMonsters import *
 
 # TTC Automaton 
@@ -35,4 +36,14 @@ dorian.setThanksMessage("Praise be on to ye!! My coat of arms!! Please accept th
 dorian.addQuoteAfterQuest("Hello Hugo! You are always welcome in my establishment!")
 dorian.addQuoteAfterQuest("Things have been much smoother here since you did away with that ruffneck Ludwig!")
 dorian.addItems([ttcPass])
-dorianCoatOfArms.setQuestForNPC(dorian)  
+dorianCoatOfArms.setQuestForNPC(dorian) 
+
+# Finius the Potion Master at the Five Thieves
+absynthe = Item("Absynthe", "Scroll", 8)
+absynthe.setItemValue(25)
+lagavul = Item("Lavagul", "Scroll", 16)
+lagavul.setItemValue(5000)
+finius = StoreKeeper("Finius", "All the Finest Potions")
+finius.setWelcomeMessage("Welcome to my humble shop. I am Finius, how can I assist you?")
+finius.setThanksMessage("Your business is most appreciated!")
+finius.addItem([absynthe,lagavul])

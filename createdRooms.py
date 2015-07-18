@@ -70,6 +70,9 @@ iowDebugPrint (debugRooms, RoomArray)
 (getRoomWithID(7)).blockDirection("Down")
 (getRoomWithID(9)).addNPCtoRoom(dorian)
 
+#Storekeepers
+(getRoomWithID(12)).addStoreKeeperToRoom(finius)
+
 #Monsters
 drunkenLudwig.addItems([dorianCoatOfArms])
 (getRoomWithID(10)).addMonsterToRoom(drunkenLudwig)

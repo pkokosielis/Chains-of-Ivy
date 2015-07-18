@@ -6,6 +6,7 @@ class Item:
       self.type = type
       self.modifier = modifier
       self.npcRequestor = None
+      self.value = 0
 
    def getName(self):
       return self.name
@@ -19,3 +20,8 @@ class Item:
    def setQuestForNPC(self, npc):
       self.npcRequestor = npc
 
+   def setItemValue(self, gold):
+      self.value = gold
+ 
+   def getItemValue(self):
+      return self.value
