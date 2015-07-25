@@ -38,7 +38,7 @@ dorian.addQuoteAfterQuest("Things have been much smoother here since you did awa
 dorian.addItems([ttcPass])
 dorianCoatOfArms.setQuestForNPC(dorian) 
 
-# Finius the Potion Master at the Five Thieves
+# Finius the Potion Master at the Five Thieves apothecary
 absynthe = Item("Absynthe", "Scroll", 8)
 absynthe.setItemValue(25)
 lagavul = Item("Lavagul", "Scroll", 16)
@@ -47,3 +47,15 @@ finius = StoreKeeper("Finius", "All the Finest Potions")
 finius.setWelcomeMessage("Welcome to my humble shop. I am Finius, how can I assist you?")
 finius.setThanksMessage("Your business is most appreciated!")
 finius.addItem([absynthe,lagavul])
+
+# Asimenia the Harvest Metalworks proprietor
+baton = Item("studded baton", "Weapon", 6)
+baton.setItemValue(125)
+silverDagger = Item("silver dagger", "Weapon", 12)
+silverDagger.setItemValue(850)
+goldDagger = Item("gold dagger", "Weapon", 20)
+goldDagger.setItemValue(2500)
+asimenia = StoreKeeper("Asimenia", "Harvest Metalworks")
+asimenia.setWelcomeMessage("Welcome to the only place to buy works of fine metal. I am Asimenia. I am sure you will find the prices most... fair.")
+asimenia.setThanksMessage("Thank you for your patronage. May this item serve you well.")
+asimenia.addItem([baton,silverDagger,goldDagger])

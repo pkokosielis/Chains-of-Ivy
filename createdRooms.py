@@ -72,6 +72,7 @@ iowDebugPrint (debugRooms, RoomArray)
 
 #Storekeepers
 (getRoomWithID(12)).addStoreKeeperToRoom(finius)
+(getRoomWithID(14)).addStoreKeeperToRoom(asimenia)
 
 #Monsters
 drunkenLudwig.addItems([dorianCoatOfArms])
