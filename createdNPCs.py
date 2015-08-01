@@ -59,3 +59,19 @@ asimenia = StoreKeeper("Asimenia", "Harvest Metalworks")
 asimenia.setWelcomeMessage("Welcome to the only place to buy works of fine metal. I am Asimenia. I am sure you will find the prices most... fair.")
 asimenia.setThanksMessage("Thank you for your patronage. May this item serve you well.")
 asimenia.addItem([baton,silverDagger,goldDagger])
+
+# Cedric the Aries Haberdashery propietor
+dusterCoat = Item("Duster Coat", "Suit", 1)
+dusterCoat.setItemValue(285)
+operaCoat = Item("Opera Coat", "Suit", 3)
+operaCoat.setItemValue(585)
+tweedCoat = Item("Tweed Coat", "Suit", 12)
+tweedCoat.setItemValue(2450)
+cedric = StoreKeeper("Cedric", "Aries Haberdashery")
+cedric.setWelcomeMessage("The finest threads can only be found here. Welcome to my haberdashery. I am Cedric. How can I be of help?")
+cedric.setThanksMessage("Wear them well! Godspeed my friend.")
+cedric.addItem([dusterCoat,operaCoat,tweedCoat])
+
+
+
+
