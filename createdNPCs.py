@@ -69,9 +69,17 @@ tweedCoat = Item("Tweed Coat", "Suit", 12)
 tweedCoat.setItemValue(2450)
 cedric = StoreKeeper("Cedric", "Aries Haberdashery")
 cedric.setWelcomeMessage("The finest threads can only be found here. Welcome to my haberdashery. I am Cedric. How can I be of help?")
-cedric.setThanksMessage("Wear them well! Godspeed my friend.")
+cedric.setThanksMessage("Wear it well! Godspeed my friend.")
 cedric.addItem([dusterCoat,operaCoat,tweedCoat])
 
-
-
-
+#Olaff the Milliner
+newsBoyCap = Item("Tweed Newsboy Cap", "Helmet", 2)
+newsBoyCap.setItemValue(135)
+aviatorCap = Item("Leather Aviator Cap", "Helmet", 6)
+aviatorCap.setItemValue(1250)
+bronzeHelmet = Item("Bronze Helmet", "Helmet", 12)
+bronzeHelmet.setItemValue(4500)
+olaff = StoreKeeper("Olaff", "Olaff's Millinery")
+olaff.setWelcomeMessage("Welcome to my millinery. I am Olaff purveyor of fine headgear. How can I be of help?")
+olaff.setThanksMessage("Blessed be!")
+olaff.addItem([newsBoyCap,aviatorCap,bronzeHelmet])
