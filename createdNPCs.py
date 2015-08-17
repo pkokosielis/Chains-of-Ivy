@@ -29,7 +29,7 @@ roxHorseW.addQuoteBeforeQuest("Are you going east? I will shuttle you along Roxb
 dorianCoatOfArms = Item("coat of arms", "coat of arms", 1)
 dorian = NPC("Dorian the fine fare merchant", 6000, 0)
 dorian.addQuoteBeforeQuest("Hello fine sir, I am Dorian Blythe the owner of this establishment.")
-dorian.addQuoteBeforeQuest("That drunken scallywag Ludwig Ironfeld took my family's coat of arms that was displayed by the entrance.")
+dorian.addQuoteBeforeQuest("That drunken scallywag Ludwig Bastille took my family's coat of arms that was displayed by the entrance.")
 dorian.addQuoteBeforeQuest("Ludwig is terrorizing my patrons upstairs! Curse he!")
 dorian.addQuoteBeforeQuest("If only I could get my coat of arms back!")
 dorian.setThanksMessage("Praise be on to ye!! My coat of arms!! Please accept this TTC pass as a token of my gratitude. It will give you unlimited access to the TTC subway system.")
