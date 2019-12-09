@@ -1,6 +1,14 @@
 #!/usr/bin/python
 import sys, os
 
+if (sys.version_info < (3,4)):
+   print ("\n*******************************************************************\n\n")
+   print ("Error starting up Chains of Ivy!!!\n\n")
+   print ("Your python interpreter is too old. Retry with python version 3.4 or higher")
+   print ("\n*******************************************************************\n\n")
+   sys.exit(1)
+
+
 from engine.IOwrappers import *
 from engine.PlayerAction import *
 from createdMonsters import *
