@@ -15,10 +15,6 @@ from createdMonsters import *
 from createdNPCs import *
 from createdRooms import *
 
-def showBanner():
-   with open("img/banner.img", 'r') as fh:
-      iowPrint(fh.read())
-
 def initSetting():
    me = Character("Professor Hugo Lockchain")
    me.setScrollText("The drink of elixir mystifies you.")
@@ -42,7 +38,6 @@ def initSetting():
 
 def gameMenu():
    iowPrint ("\n\n")
-   showBanner()
    iowPrint ("\n\n")
    iowPrint ("Welcome, your options are:\n")
    iowPrint ("1) Start new game")
