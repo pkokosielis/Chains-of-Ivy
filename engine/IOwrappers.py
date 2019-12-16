@@ -5,9 +5,6 @@ from tkinter import *
 iField = None
 viewer = None 
 
-def py34orLater():
-   return sys.hexversion >= 0x03040000   
-
 def iowSetInput(iObject):
    global iField 
    iField = iObject
@@ -48,7 +45,4 @@ def iowDebugPrint(debug, msg):
       iowPrint(msg)
 
 def iowInput(cmd):
-   if (py34orLater()):
-      return input(cmd)
-   else:
-      return raw_input(cmd)        
+   return input(cmd)
