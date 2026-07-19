@@ -1,13 +1,9 @@
 import textwrap
-import sys
-from tkinter import *
 
-iField = None
-viewer = None 
+viewer = None
 
-def iowSetInput(iObject):
-   global iField 
-   iField = iObject
+# A viewer is any object exposing write(msg). Frontends (tuimain.py, ...)
+# supply their own adapter around whatever widget they use.
 
 def iowGetViewer():
    return viewer
@@ -18,7 +14,7 @@ def iowSetViewer(vObject):
 
 def iowPrint(msg):
    if (viewer != None):
-   	iowPrintViewer(msg)
+      viewer.write(msg)
    else:
       print (msg)
 
@@ -27,18 +23,9 @@ def iowWrapPrint(msg):
       dedented_text = textwrap.dedent(msg).strip()
       iowPrint (textwrap.fill(dedented_text, 80))
       iowPrint ("\n")
- 
+
    else:
       print (msg)
-
-
-def iowPrintViewer(msg):
-   global viewer
-   viewer['state'] = 'normal'
-   viewer.insert(END, "\n" + msg)
-   viewer.see(END)
-   viewer['state'] = 'disabled'
-   iField.focus_set()
 
 def iowDebugPrint(debug, msg):
    if (debug):

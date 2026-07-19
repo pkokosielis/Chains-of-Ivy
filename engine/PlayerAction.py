@@ -94,8 +94,11 @@ class PlayerAction:
            pickle.dump(character, output, pickle.HIGHEST_PROTOCOL)
 
    def doSave(self, room, character):
-      iowPrint ("Are you sure you want to save the current game? [y/n]")
-      response = iowInput(">>: ")
+      if (iowGetViewer() != None):
+         response = "y"
+      else:
+         iowPrint ("Are you sure you want to save the current game? [y/n]")
+         response = iowInput(">>: ")
       if (response == "y"):
          with open(gSavedSettingFileName, 'wb') as output:
            pickle.dump(room, output, pickle.HIGHEST_PROTOCOL)
@@ -117,8 +120,11 @@ class PlayerAction:
 
    def doRestore(self, room, character):
       self.restoreRequested = "False"
-      iowPrint ("Are you sure you want to restore to the last saved game? [y/n]")
-      response = iowInput(">>: ")      
+      if (iowGetViewer() != None):
+         response = "y"
+      else:
+         iowPrint ("Are you sure you want to restore to the last saved game? [y/n]")
+         response = iowInput(">>: ")
       if (response == "y"):
         if (os.path.exists(gSavedSettingFileName) and
             os.path.exists(gSavedPlayerFileName)):
@@ -141,8 +147,11 @@ class PlayerAction:
         return self.doRestore(room, character)
 
    def doQuit(self):
-      iowPrint ("Are you sure you want to quit this game? [y/n]")
-      response = iowInput(">>: ")
+      if (iowGetViewer() != None):
+         response = "y"
+      else:
+         iowPrint ("Are you sure you want to quit this game? [y/n]")
+         response = iowInput(">>: ")
       if (response == "y"):
          iowPrint ("You are vapourized into the next plane of existence... So long!")
          exit(0)
