@@ -167,6 +167,10 @@ class ChainsOfIvyApp(App):
                      "'restore' to load a saved game, or 'quit' to exit.")
          return
 
+      if action == "save":
+         self.confirmSave()
+         return
+
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
 
       if self.player.isDead():
@@ -192,6 +196,18 @@ class ChainsOfIvyApp(App):
 
       self.push_screen(
          ConfirmScreen("Are you sure you want to restore the last saved game?\nCurrent progress will be lost."),
+         handle_response,
+      )
+
+   def confirmSave(self) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            self.nextAction.doSave(self.currentRoom, self.player)
+         else:
+            iowPrint("save is cancelled.")
+
+      self.push_screen(
+         ConfirmScreen("Are you sure you want to save the current game?"),
          handle_response,
       )
 

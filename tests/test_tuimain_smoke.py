@@ -40,10 +40,50 @@ def test_tuimain_full_session_smoke():
    assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
 
 
-def test_tuimain_save_command_does_not_hang(tmp_path, monkeypatch):
+def test_tuimain_save_shows_dialog_and_no_cancels(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
 
-   asyncio.run(asyncio.wait_for(_play(["save"]), TIMEOUT))
+   async def _play_save_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("save"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_save_then_cancel(), TIMEOUT))
+
+   assert "save is cancelled." in output
+   assert not (tmp_path / "game.dat").exists()
+   assert not (tmp_path / "player.dat").exists()
+
+
+def test_tuimain_save_confirmed_does_not_hang(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_save_then_confirm():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await pilot.click("#command")
+         await pilot.press(*tuple("save"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+   asyncio.run(asyncio.wait_for(_play_save_then_confirm(), TIMEOUT))
 
    assert (tmp_path / "game.dat").exists()
    assert (tmp_path / "player.dat").exists()
@@ -186,11 +226,19 @@ def test_tuimain_restore_confirmed_loads_saved_game(tmp_path, monkeypatch):
       async with app.run_test() as pilot:
          log = app.query_one("#log", RichLog)
 
-         for command in ["save", "d"]:
-            await pilot.click("#command")
-            await pilot.press(*tuple(command))
-            await pilot.press("enter")
-            await pilot.pause()
+         await pilot.click("#command")
+         await pilot.press(*tuple("save"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("d"))
+         await pilot.press("enter")
+         await pilot.pause()
 
          assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
 
