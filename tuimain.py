@@ -9,7 +9,7 @@ if (sys.version_info < (3, 4)):
    sys.exit(1)
 
 from textual.app import App, ComposeResult
-from textual.containers import Grid
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Header, Footer, RichLog, Input, Label, Button
 
@@ -112,6 +112,41 @@ class ChainsOfIvyApp(App):
       border: round $accent;
       background: $surface;
    }
+
+   #game-pane {
+      width: 1fr;
+   }
+
+   #inventory-pane {
+      width: 38;
+      border: round $accent;
+      background: $surface;
+      padding: 0 1;
+   }
+
+   #inventory-title {
+      text-style: bold;
+      padding: 0 0 1 0;
+   }
+
+   #inventory-list {
+      height: 1fr;
+   }
+
+   .inventory-row {
+      height: auto;
+      margin: 0 0 1 0;
+   }
+
+   .inventory-item-name {
+      width: 1fr;
+      content-align: left middle;
+   }
+
+   .inventory-item-use, .inventory-item-drop {
+      width: auto;
+      min-width: 7;
+   }
    """
 
    def __init__(self):
@@ -119,20 +154,27 @@ class ChainsOfIvyApp(App):
       self.nextAction = PlayerAction()
       self.currentRoom = None
       self.player = None
+      self.inventoryButtonItems = {}
 
    def compose(self) -> ComposeResult:
       yield Header()
-      yield RichLog(id="log", wrap=True, markup=False, highlight=False)
-      yield Input(placeholder="What do you do?", id="command")
+      with Horizontal():
+         with Vertical(id="game-pane"):
+            yield RichLog(id="log", wrap=True, markup=False, highlight=False)
+            yield Input(placeholder="What do you do?", id="command")
+         with Vertical(id="inventory-pane"):
+            yield Label("Inventory", id="inventory-title")
+            yield VerticalScroll(id="inventory-list")
       yield Footer()
 
-   def on_mount(self) -> None:
+   async def on_mount(self) -> None:
       log = self.query_one("#log", RichLog)
       command = self.query_one("#command", Input)
       iowSetViewer(RichLogViewer(log, command))
 
       iowPrint("Chains of Ivy\n")
       self.startNewGame()
+      await self.refreshInventory()
       command.focus()
 
    def startNewGame(self) -> None:
@@ -142,7 +184,7 @@ class ChainsOfIvyApp(App):
       self.player = initialSetting[1]
       self.currentRoom.displayRoom()
 
-   def on_input_submitted(self, event: Input.Submitted) -> None:
+   async def on_input_submitted(self, event: Input.Submitted) -> None:
       action = event.value.strip()
       event.input.value = ""
       if not action:
@@ -162,6 +204,7 @@ class ChainsOfIvyApp(App):
          if action == "restart":
             iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
             self.startNewGame()
+            await self.refreshInventory()
          else:
             iowPrint("You have already perished. Type 'restart' for a new game, "
                      "'restore' to load a saved game, or 'quit' to exit.")
@@ -192,6 +235,7 @@ class ChainsOfIvyApp(App):
                return
 
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
+      await self.refreshInventory()
 
       if self.player.isDead():
          iowPrint("\nYou have perished in battle! GAME OVER.")
@@ -208,9 +252,10 @@ class ChainsOfIvyApp(App):
       self.push_screen(ConfirmScreen("Are you sure you want to quit this game?"), handle_response)
 
    def confirmRestore(self) -> None:
-      def handle_response(confirmed: bool) -> None:
+      async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
+            await self.refreshInventory()
          else:
             iowPrint("restore is cancelled.")
 
@@ -240,9 +285,10 @@ class ChainsOfIvyApp(App):
       return None
 
    def confirmTalk(self, npc) -> None:
-      def handle_response(confirmed: bool) -> None:
+      async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, "talk")
+            await self.refreshInventory()
          else:
             iowPrint("You decide to keep your business to yourself for now.")
 
@@ -255,9 +301,10 @@ class ChainsOfIvyApp(App):
       )
 
    def confirmDrop(self, item) -> None:
-      def handle_response(confirmed: bool) -> None:
+      async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.player.dropItem(self.currentRoom, item.getName())
+            await self.refreshInventory()
          else:
             iowPrint("You decide to hold onto the " + item.getName() + " after all.")
 
@@ -267,9 +314,10 @@ class ChainsOfIvyApp(App):
       )
 
    def confirmBuy(self, storeKeeper, item) -> None:
-      def handle_response(confirmed: bool) -> None:
+      async def handle_response(confirmed: bool) -> None:
          if confirmed:
             storeKeeper.sellItem(item.getName(), self.player, self.currentRoom)
+            await self.refreshInventory()
          else:
             iowPrint("You decide not to buy the " + item.getName() + " after all.")
 
@@ -277,6 +325,49 @@ class ChainsOfIvyApp(App):
          ConfirmScreen("Buy the " + item.getName() + " for " + str(item.getItemValue()) + " gold?"),
          handle_response,
       )
+
+   async def refreshInventory(self) -> None:
+      container = self.query_one("#inventory-list", VerticalScroll)
+      await container.remove_children()
+      self.inventoryButtonItems = {}
+
+      if not self.player or not self.player.inventory:
+         await container.mount(Label("Nothing carried.", id="inventory-empty"))
+         return
+
+      rows = []
+      for index, item in enumerate(self.player.inventory):
+         equipped = item is self.player.weapon or item is self.player.helmet \
+            or item is self.player.suit or item is self.player.boots
+         useId = "inv-use-" + str(index)
+         dropId = "inv-drop-" + str(index)
+         self.inventoryButtonItems[useId] = item
+         self.inventoryButtonItems[dropId] = item
+         rows.append(Horizontal(
+            Label(item.getName(), classes="inventory-item-name"),
+            Button("Equipped" if equipped else "Use", id=useId, disabled=equipped,
+                   classes="inventory-item-use"),
+            Button("Drop", id=dropId, classes="inventory-item-drop"),
+            classes="inventory-row",
+         ))
+      await container.mount_all(rows)
+
+   async def on_button_pressed(self, event: Button.Pressed) -> None:
+      item = self.inventoryButtonItems.get(event.button.id or "")
+      if item is None:
+         return
+
+      if self.player.isDead():
+         iowPrint("You have already perished. Type 'restart' for a new game, "
+                  "'restore' to load a saved game, or 'quit' to exit.")
+         return
+
+      if event.button.id.startswith("inv-use-"):
+         iowPrint("\n>>: use " + item.getName())
+         self.player.useItem(item.getName())
+         await self.refreshInventory()
+      elif event.button.id.startswith("inv-drop-"):
+         self.confirmDrop(item)
 
 
 def main():

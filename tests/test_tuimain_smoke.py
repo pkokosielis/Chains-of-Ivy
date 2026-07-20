@@ -509,3 +509,143 @@ def test_tuimain_buy_insufficient_gold_skips_dialog():
    output = asyncio.run(asyncio.wait_for(_play_buy_too_poor(), TIMEOUT))
 
    assert "You can't afford a Test Tonic with only 0 gold pieces!" in output
+
+
+def _build_two_item_room():
+   # A dedicated Room/Item set, rather than the shared global Study room,
+   # since that singleton persists across the whole test session and
+   # accumulates leftover items from earlier tests.
+   weapon = Item("Test Weapon", "Weapon", 9)
+   suit = Item("Test Suit", "Suit", 9)
+   room = Room(996, "Test Take Room", "A room for testing the inventory panel.", 0, [])
+   room.addItemToRoom(weapon)
+   room.addItemToRoom(suit)
+   return room, weapon, suit
+
+
+def test_tuimain_inventory_panel_starts_empty():
+   async def _check_empty_panel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await pilot.pause()
+         assert len(app.query("#inventory-empty")) == 1
+         assert len(app.query(".inventory-row")) == 0
+
+   asyncio.run(asyncio.wait_for(_check_empty_panel(), TIMEOUT))
+
+
+def test_tuimain_inventory_panel_lists_items_after_take():
+   async def _take_and_inspect_panel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         room, weapon, suit = _build_two_item_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("take all"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         rowCount = len(app.query(".inventory-row"))
+         emptyCount = len(app.query("#inventory-empty"))
+         useLabels = [b.label.plain for b in app.query(".inventory-item-use")]
+         return rowCount, emptyCount, useLabels
+
+   rowCount, emptyCount, useLabels = asyncio.run(asyncio.wait_for(_take_and_inspect_panel(), TIMEOUT))
+
+   assert rowCount == 2
+   assert emptyCount == 0
+   assert useLabels == ["Use", "Use"]
+
+
+def test_tuimain_inventory_use_button_equips_and_disables():
+   async def _use_via_panel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         room, weapon, suit = _build_two_item_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("take all"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         # Inventory order matches take order: Test Weapon, Test Suit.
+         await pilot.click("#inv-use-0")
+         await pilot.pause()
+
+         weaponName = app.player.weapon.getName() if app.player.weapon else None
+         labels = [(b.label.plain, b.disabled) for b in app.query(".inventory-item-use")]
+         return weaponName, labels
+
+   weaponName, labels = asyncio.run(asyncio.wait_for(_use_via_panel(), TIMEOUT))
+
+   assert weaponName == "Test Weapon"
+   assert ("Equipped", True) in labels
+
+
+def test_tuimain_inventory_drop_button_shows_dialog_and_no_cancels():
+   async def _drop_via_panel_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+         room, weapon, suit = _build_two_item_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("take all"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         await pilot.click("#inv-drop-0")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         hasWeapon = weapon in app.player.inventory
+         rowCount = len(app.query(".inventory-row"))
+         return "\n".join(strip.text for strip in log.lines), hasWeapon, rowCount
+
+   output, hasWeapon, rowCount = asyncio.run(asyncio.wait_for(_drop_via_panel_then_cancel(), TIMEOUT))
+
+   assert "hold onto the Test Weapon" in output
+   assert hasWeapon
+   assert rowCount == 2
+
+
+def test_tuimain_inventory_drop_button_confirmed_clears_equipped_slot():
+   async def _use_then_drop_via_panel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         room, weapon, suit = _build_two_item_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("take all"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         await pilot.click("#inv-use-0")
+         await pilot.pause()
+
+         await pilot.click("#inv-drop-0")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         weaponIsNone = app.player.weapon is None
+         hasWeapon = weapon in app.player.inventory
+         rowCount = len(app.query(".inventory-row"))
+         return weaponIsNone, hasWeapon, rowCount
+
+   weaponIsNone, hasWeapon, rowCount = asyncio.run(asyncio.wait_for(_use_then_drop_via_panel(), TIMEOUT))
+
+   assert weaponIsNone
+   assert not hasWeapon
+   assert rowCount == 1
