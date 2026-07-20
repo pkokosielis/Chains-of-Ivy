@@ -100,8 +100,8 @@ class Character:
     
       if item == self.weapon:
          self.Weapon = None
-      elif item in self.helmet:
-         self.helmet = None 
+      elif item == self.helmet:
+         self.helmet = None
       elif item == self.suit:
          self.suit = None
       elif item == self.boots:
