@@ -12,6 +12,9 @@ import asyncio
 import pytest
 from textual.widgets import RichLog
 
+from engine.Item import Item
+from engine.NPC import NPC
+from engine.Room import Room
 from tuimain import ChainsOfIvyApp, ConfirmScreen
 
 TIMEOUT = 15
@@ -258,3 +261,79 @@ def test_tuimain_restore_confirmed_loads_saved_game(tmp_path, monkeypatch):
 
    assert "Game Restored" in output
    assert app.currentRoom.getTitle() == "Chorley Park Study"
+
+
+def _build_pending_quest_room():
+   npc = NPC("Test Quest Giver", 50, 10)
+   npc.setThanksMessage("Much obliged!")
+   questItem = Item("Test Trinket", "Trinket", 0)
+   questItem.setQuestForNPC(npc)
+   room = Room(999, "Test Quest Room", "A room for testing quests.", 0, [])
+   room.addNPCtoRoom(npc)
+   return room, npc, questItem
+
+
+def test_tuimain_talk_quest_turn_in_shows_dialog_and_no_cancels():
+   async def _play_talk_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         room, npc, questItem = _build_pending_quest_room()
+         app.currentRoom = room
+         app.player.addToInventory(questItem)
+         assert npc.getQuestFulfilledStatus() == "Pending"
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("talk"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         return app, npc, questItem, "\n".join(strip.text for strip in log.lines)
+
+   app, npc, questItem, output = asyncio.run(asyncio.wait_for(_play_talk_then_cancel(), TIMEOUT))
+
+   assert "keep your business to yourself" in output
+   assert npc.getQuestFulfilledStatus() == "Pending"
+   assert questItem in app.player.inventory
+
+
+def test_tuimain_talk_quest_turn_in_confirmed_completes_quest():
+   async def _play_talk_then_confirm():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         room, npc, questItem = _build_pending_quest_room()
+         app.currentRoom = room
+         app.player.addToInventory(questItem)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("talk"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app, npc, questItem
+
+   app, npc, questItem = asyncio.run(asyncio.wait_for(_play_talk_then_confirm(), TIMEOUT))
+
+   assert npc.getQuestFulfilledStatus() == "True"
+   assert questItem not in app.player.inventory
+   assert app.player.experience == 50
+   assert app.player.gold == 10
+
+
+def test_tuimain_talk_without_pending_quest_skips_dialog():
+   # If "talk" were routed through the quest confirmation dialog, this
+   # message (produced deep inside doAction) would never be reached.
+   app, output = asyncio.run(asyncio.wait_for(_play(["talk"]), TIMEOUT))
+
+   assert "mutter to yourself bitterly" in output

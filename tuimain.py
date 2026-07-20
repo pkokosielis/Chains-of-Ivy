@@ -171,6 +171,12 @@ class ChainsOfIvyApp(App):
          self.confirmSave()
          return
 
+      if action == "talk":
+         pendingNpc = self.getPendingQuestNpc()
+         if pendingNpc is not None:
+            self.confirmTalk(pendingNpc)
+            return
+
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
 
       if self.player.isDead():
@@ -208,6 +214,29 @@ class ChainsOfIvyApp(App):
 
       self.push_screen(
          ConfirmScreen("Are you sure you want to save the current game?"),
+         handle_response,
+      )
+
+   def getPendingQuestNpc(self):
+      if not self.currentRoom or not self.currentRoom.npc:
+         return None
+      for npc in self.currentRoom.npc:
+         if npc.getQuestFulfilledStatus() == "Pending":
+            return npc
+      return None
+
+   def confirmTalk(self, npc) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, "talk")
+         else:
+            iowPrint("You decide to keep your business to yourself for now.")
+
+      self.push_screen(
+         ConfirmScreen(
+            "Turn in your quest item(s) to " + npc.getName() + " for "
+            + str(npc.getExpToGive()) + " experience and " + str(npc.getGoldToGive()) + " gold?"
+         ),
          handle_response,
       )
 
