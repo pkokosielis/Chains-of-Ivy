@@ -53,3 +53,36 @@ def test_tuimain_unknown_command_reports_error():
    app, output = asyncio.run(asyncio.wait_for(_play(["asdfgh"]), TIMEOUT))
 
    assert "I don't understand your command" in output
+
+
+def test_tuimain_restart_after_death_returns_to_playable_state():
+   async def _play_then_kill_then_restart():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         # Kill the player directly, mirroring death mid-battle, then confirm
+         # every ordinary command is refused until "restart" is issued.
+         app.player.hp = 0
+
+         for command in ["look", "n", "attack", "inventory"]:
+            await pilot.click("#command")
+            await pilot.press(*tuple(command))
+            await pilot.press("enter")
+            await pilot.pause()
+
+         stuck_output = "\n".join(strip.text for strip in log.lines)
+         assert stuck_output.count("You have already perished") == 4
+         assert app.player.isDead() is True
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("restart"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_then_kill_then_restart(), TIMEOUT))
+
+   assert app.player.isDead() is False
+   assert "Chorley Park Study" in output

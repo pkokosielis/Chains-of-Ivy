@@ -80,11 +80,15 @@ class ChainsOfIvyApp(App):
       iowSetViewer(RichLogViewer(log, command))
 
       iowPrint("Chains of Ivy\n")
+      self.startNewGame()
+      command.focus()
+
+   def startNewGame(self) -> None:
+      self.nextAction = PlayerAction()
       initialSetting = initSetting()
       self.currentRoom = initialSetting[0]
       self.player = initialSetting[1]
       self.currentRoom.displayRoom()
-      command.focus()
 
    def on_input_submitted(self, event: Input.Submitted) -> None:
       action = event.value.strip()
@@ -95,13 +99,23 @@ class ChainsOfIvyApp(App):
       iowPrint("\n>>: " + action)
 
       if self.player.isDead():
-         iowPrint("You have already perished. Restart to play again.")
+         if action == "restart":
+            iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
+            self.startNewGame()
+         elif action == "restore":
+            self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
+         elif action == "quit":
+            self.nextAction.doQuit()
+         else:
+            iowPrint("You have already perished. Type 'restart' for a new game, "
+                     "'restore' to load a saved game, or 'quit' to exit.")
          return
 
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
 
       if self.player.isDead():
          iowPrint("\nYou have perished in battle! GAME OVER.")
+         iowPrint("Type 'restart' for a new game, 'restore' to load a saved game, or 'quit' to exit.")
 
 
 def main():
