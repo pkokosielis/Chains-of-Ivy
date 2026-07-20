@@ -80,7 +80,7 @@ class Character:
 
    def removeItem(self, item):
       if item == self.weapon:
-         self.Weapon = None
+         self.weapon = None
       elif item == self.helmet:
          self.helmet = None
       elif item == self.suit:
@@ -99,7 +99,7 @@ class Character:
          return
     
       if item == self.weapon:
-         self.Weapon = None
+         self.weapon = None
       elif item == self.helmet:
          self.helmet = None
       elif item == self.suit:
