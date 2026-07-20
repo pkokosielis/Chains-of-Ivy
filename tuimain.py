@@ -183,6 +183,14 @@ class ChainsOfIvyApp(App):
             self.confirmDrop(item)
             return
 
+      if action[:4] == "buy ":
+         storeKeeper = self.currentRoom.storeKeeper if self.currentRoom else None
+         if storeKeeper is not None:
+            item = storeKeeper.existsItem(action[4:])
+            if item is not None and self.player.getGold() >= item.getItemValue():
+               self.confirmBuy(storeKeeper, item)
+               return
+
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
 
       if self.player.isDead():
@@ -255,6 +263,18 @@ class ChainsOfIvyApp(App):
 
       self.push_screen(
          ConfirmScreen("Are you sure you want to drop the " + item.getName() + "?"),
+         handle_response,
+      )
+
+   def confirmBuy(self, storeKeeper, item) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            storeKeeper.sellItem(item.getName(), self.player, self.currentRoom)
+         else:
+            iowPrint("You decide not to buy the " + item.getName() + " after all.")
+
+      self.push_screen(
+         ConfirmScreen("Buy the " + item.getName() + " for " + str(item.getItemValue()) + " gold?"),
          handle_response,
       )
 

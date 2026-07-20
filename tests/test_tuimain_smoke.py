@@ -15,6 +15,7 @@ from textual.widgets import RichLog
 from engine.Item import Item
 from engine.NPC import NPC
 from engine.Room import Room
+from engine.StoreKeeper import StoreKeeper
 from tuimain import ChainsOfIvyApp, ConfirmScreen
 
 TIMEOUT = 15
@@ -397,3 +398,114 @@ def test_tuimain_drop_unknown_item_skips_dialog():
    app, output = asyncio.run(asyncio.wait_for(_play(["drop nonexistent item"]), TIMEOUT))
 
    assert "I don't have a nonexistent item" in output
+
+
+def _build_store_room():
+   item = Item("Test Tonic", "Scroll", 3)
+   item.setItemValue(10)
+   storeKeeper = StoreKeeper("Test Merchant", "Test Shop")
+   storeKeeper.setThanksMessage("Much obliged!")
+   storeKeeper.addItem([item])
+   room = Room(998, "Test Store Room", "A room for testing purchases.", 0, [])
+   room.addStoreKeeperToRoom(storeKeeper)
+   return room, storeKeeper, item
+
+
+def test_tuimain_buy_shows_dialog_and_no_cancels():
+   async def _play_buy_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         room, storeKeeper, item = _build_store_room()
+         app.currentRoom = room
+         app.player.incrementGold(100)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("buy Test Tonic"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_buy_then_cancel(), TIMEOUT))
+
+   assert "decide not to buy" in output
+   assert app.player.getGold() == 100
+   assert not any(item.getName() == "Test Tonic" for item in app.player.inventory)
+
+
+def test_tuimain_buy_confirmed_completes_purchase():
+   async def _play_buy_then_confirm():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         room, storeKeeper, item = _build_store_room()
+         app.currentRoom = room
+         app.player.incrementGold(100)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("buy Test Tonic"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_buy_then_confirm(), TIMEOUT))
+
+   assert "sells you a Test Tonic" in output
+   assert app.player.getGold() == 90
+   assert any(item.getName() == "Test Tonic" for item in app.player.inventory)
+
+
+def test_tuimain_buy_unknown_item_skips_dialog():
+   async def _play_buy_unknown():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         room, storeKeeper, item = _build_store_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("buy nonexistent item"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         return "\n".join(strip.text for strip in log.lines)
+
+   output = asyncio.run(asyncio.wait_for(_play_buy_unknown(), TIMEOUT))
+
+   assert "There is no nonexistent item available to buy!" in output
+
+
+def test_tuimain_buy_insufficient_gold_skips_dialog():
+   async def _play_buy_too_poor():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         room, storeKeeper, item = _build_store_room()
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("buy Test Tonic"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         return "\n".join(strip.text for strip in log.lines)
+
+   output = asyncio.run(asyncio.wait_for(_play_buy_too_poor(), TIMEOUT))
+
+   assert "You can't afford a Test Tonic with only 0 gold pieces!" in output
