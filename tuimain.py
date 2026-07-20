@@ -11,7 +11,7 @@ if (sys.version_info < (3, 4)):
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Header, Footer, RichLog, Input, Label, Button
+from textual.widgets import Header, Footer, RichLog, Input, Label, Button, Static
 
 from engine.IOwrappers import *
 from engine.PlayerAction import *
@@ -113,12 +113,24 @@ class ChainsOfIvyApp(App):
       background: $surface;
    }
 
+   #stats-pane {
+      height: auto;
+      border: round $accent;
+      background: $surface;
+      padding: 0 1;
+      margin: 0 0 1 0;
+   }
+
    #game-pane {
       width: 1fr;
    }
 
-   #inventory-pane {
+   #side-pane {
       width: 38;
+   }
+
+   #inventory-pane {
+      height: 1fr;
       border: round $accent;
       background: $surface;
       padding: 0 1;
@@ -147,7 +159,45 @@ class ChainsOfIvyApp(App):
       width: auto;
       min-width: 7;
    }
+
+   #direction-pane {
+      height: auto;
+      border: round $accent;
+      background: $surface;
+      padding: 0 1;
+      margin: 1 0 0 0;
+   }
+
+   #direction-title {
+      text-style: bold;
+      padding: 0 0 1 0;
+   }
+
+   #direction-compass {
+      height: auto;
+   }
+
+   #direction-updown {
+      height: auto;
+      margin: 1 0 0 0;
+   }
+
+   .direction-btn {
+      width: 1fr;
+      min-width: 5;
+      margin: 0 1 0 0;
+   }
    """
+
+   # (button id, action char, Room attribute name, blockedDirections label, button label)
+   DIRECTION_INFO = [
+      ("dir-n", "n", "north", "North", "N"),
+      ("dir-s", "s", "south", "South", "S"),
+      ("dir-e", "e", "east", "East", "E"),
+      ("dir-w", "w", "west", "West", "W"),
+      ("dir-u", "u", "up", "Up", "Up"),
+      ("dir-d", "d", "down", "Down", "Down"),
+   ]
 
    def __init__(self):
       super().__init__()
@@ -158,13 +208,26 @@ class ChainsOfIvyApp(App):
 
    def compose(self) -> ComposeResult:
       yield Header()
-      with Horizontal():
-         with Vertical(id="game-pane"):
-            yield RichLog(id="log", wrap=True, markup=False, highlight=False)
-            yield Input(placeholder="What do you do?", id="command")
-         with Vertical(id="inventory-pane"):
-            yield Label("Inventory", id="inventory-title")
-            yield VerticalScroll(id="inventory-list")
+      with Vertical(id="app-body"):
+         yield Static(id="stats-pane")
+         with Horizontal(id="main-pane"):
+            with Vertical(id="game-pane"):
+               yield RichLog(id="log", wrap=True, markup=False, highlight=False)
+               yield Input(placeholder="What do you do?", id="command")
+            with Vertical(id="side-pane"):
+               with Vertical(id="inventory-pane"):
+                  yield Label("Inventory", id="inventory-title")
+                  yield VerticalScroll(id="inventory-list")
+               with Vertical(id="direction-pane"):
+                  yield Label("Move", id="direction-title")
+                  with Horizontal(id="direction-compass"):
+                     yield Button("N", id="dir-n", classes="direction-btn")
+                     yield Button("S", id="dir-s", classes="direction-btn")
+                     yield Button("E", id="dir-e", classes="direction-btn")
+                     yield Button("W", id="dir-w", classes="direction-btn")
+                  with Horizontal(id="direction-updown"):
+                     yield Button("Up", id="dir-u", classes="direction-btn")
+                     yield Button("Down", id="dir-d", classes="direction-btn")
       yield Footer()
 
    async def on_mount(self) -> None:
@@ -174,7 +237,7 @@ class ChainsOfIvyApp(App):
 
       iowPrint("Chains of Ivy\n")
       self.startNewGame()
-      await self.refreshInventory()
+      await self.refreshUI()
       command.focus()
 
    def startNewGame(self) -> None:
@@ -204,7 +267,7 @@ class ChainsOfIvyApp(App):
          if action == "restart":
             iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
             self.startNewGame()
-            await self.refreshInventory()
+            await self.refreshUI()
          else:
             iowPrint("You have already perished. Type 'restart' for a new game, "
                      "'restore' to load a saved game, or 'quit' to exit.")
@@ -234,8 +297,11 @@ class ChainsOfIvyApp(App):
                self.confirmBuy(storeKeeper, item)
                return
 
+      await self.performAction(action)
+
+   async def performAction(self, action: str) -> None:
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
-      await self.refreshInventory()
+      await self.refreshUI()
 
       if self.player.isDead():
          iowPrint("\nYou have perished in battle! GAME OVER.")
@@ -255,7 +321,7 @@ class ChainsOfIvyApp(App):
       async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
-            await self.refreshInventory()
+            await self.refreshUI()
          else:
             iowPrint("restore is cancelled.")
 
@@ -288,7 +354,7 @@ class ChainsOfIvyApp(App):
       async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, "talk")
-            await self.refreshInventory()
+            await self.refreshUI()
          else:
             iowPrint("You decide to keep your business to yourself for now.")
 
@@ -304,7 +370,7 @@ class ChainsOfIvyApp(App):
       async def handle_response(confirmed: bool) -> None:
          if confirmed:
             self.player.dropItem(self.currentRoom, item.getName())
-            await self.refreshInventory()
+            await self.refreshUI()
          else:
             iowPrint("You decide to hold onto the " + item.getName() + " after all.")
 
@@ -317,7 +383,7 @@ class ChainsOfIvyApp(App):
       async def handle_response(confirmed: bool) -> None:
          if confirmed:
             storeKeeper.sellItem(item.getName(), self.player, self.currentRoom)
-            await self.refreshInventory()
+            await self.refreshUI()
          else:
             iowPrint("You decide not to buy the " + item.getName() + " after all.")
 
@@ -352,8 +418,53 @@ class ChainsOfIvyApp(App):
          ))
       await container.mount_all(rows)
 
+   def refreshStats(self) -> None:
+      statsPane = self.query_one("#stats-pane", Static)
+      if not self.player:
+         statsPane.update("")
+         return
+
+      player = self.player
+      weaponName = player.weapon.getName() if player.weapon else "Bare Hands"
+      statsPane.update(
+         "[b]" + player.getName() + "[/b]   Level " + str(player.level)
+         + "   XP " + str(player.experience) + "\n"
+         + "HP " + str(player.hp) + "/" + str(player.hp_max)
+         + "   Might " + str(player.might) + "   Magic " + str(player.magic)
+         + "   Gold " + str(player.gold) + "   AC " + str(player.getArmorClass())
+         + "   Weapon: " + weaponName
+      )
+
+   def refreshDirections(self) -> None:
+      room = self.currentRoom
+      for buttonId, actionChar, attrName, blockedLabel, label in self.DIRECTION_INFO:
+         button = self.query_one("#" + buttonId, Button)
+         available = bool(room) and getattr(room, attrName) is not None \
+            and blockedLabel not in room.blockedDirections
+         button.disabled = not available
+
+   async def refreshUI(self) -> None:
+      await self.refreshInventory()
+      self.refreshStats()
+      self.refreshDirections()
+
    async def on_button_pressed(self, event: Button.Pressed) -> None:
-      item = self.inventoryButtonItems.get(event.button.id or "")
+      buttonId = event.button.id or ""
+
+      if buttonId.startswith("dir-"):
+         if self.player.isDead():
+            iowPrint("You have already perished. Type 'restart' for a new game, "
+                     "'restore' to load a saved game, or 'quit' to exit.")
+            return
+         directionAction = next(
+            (actionChar for bId, actionChar, _, _, _ in self.DIRECTION_INFO if bId == buttonId), None
+         )
+         if directionAction is not None:
+            iowPrint("\n>>: " + directionAction)
+            await self.performAction(directionAction)
+         return
+
+      item = self.inventoryButtonItems.get(buttonId)
       if item is None:
          return
 
@@ -362,11 +473,11 @@ class ChainsOfIvyApp(App):
                   "'restore' to load a saved game, or 'quit' to exit.")
          return
 
-      if event.button.id.startswith("inv-use-"):
+      if buttonId.startswith("inv-use-"):
          iowPrint("\n>>: use " + item.getName())
          self.player.useItem(item.getName())
-         await self.refreshInventory()
-      elif event.button.id.startswith("inv-drop-"):
+         await self.refreshUI()
+      elif buttonId.startswith("inv-drop-"):
          self.confirmDrop(item)
 
 

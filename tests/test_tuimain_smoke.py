@@ -10,7 +10,7 @@ fast instead of stalling the suite.
 import asyncio
 
 import pytest
-from textual.widgets import RichLog
+from textual.widgets import Button, RichLog, Static
 
 from engine.Item import Item
 from engine.NPC import NPC
@@ -649,3 +649,84 @@ def test_tuimain_inventory_drop_button_confirmed_clears_equipped_slot():
    assert weaponIsNone
    assert not hasWeapon
    assert rowCount == 1
+
+
+def test_tuimain_stats_pane_shows_and_updates_character_stats():
+   async def _check_stats_pane():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         statsPane = app.query_one("#stats-pane", Static)
+         initialText = str(statsPane.renderable)
+
+         app.player.incrementGold(25)
+         app.player.hp -= 5
+         app.refreshStats()
+         await pilot.pause()
+
+         updatedText = str(statsPane.renderable)
+         return initialText, updatedText
+
+   initialText, updatedText = asyncio.run(asyncio.wait_for(_check_stats_pane(), TIMEOUT))
+
+   assert "Professor Hugo Lockchain" in initialText
+   assert "Gold 0" in initialText
+   assert "HP 30/30" in initialText
+   assert "Gold 25" in updatedText
+   assert "HP 25/30" in updatedText
+
+
+def test_tuimain_direction_buttons_reflect_room_exits():
+   async def _check_direction_buttons():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await pilot.pause()
+         disabledById = {
+            buttonId: app.query_one("#" + buttonId, Button).disabled
+            for buttonId in ["dir-n", "dir-s", "dir-e", "dir-w", "dir-u", "dir-d"]
+         }
+         return disabledById
+
+   disabledById = asyncio.run(asyncio.wait_for(_check_direction_buttons(), TIMEOUT))
+
+   # Chorley Park Study only has a Down exit at game start.
+   assert disabledById["dir-d"] is False
+   assert disabledById["dir-n"] is True
+   assert disabledById["dir-s"] is True
+   assert disabledById["dir-e"] is True
+   assert disabledById["dir-w"] is True
+   assert disabledById["dir-u"] is True
+
+
+def test_tuimain_direction_button_click_moves_player():
+   async def _click_down():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#dir-d")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_click_down(), TIMEOUT))
+
+   assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
+   assert "Chorley Park Library Hall" in output
+
+
+def test_tuimain_direction_button_disabled_after_dead():
+   async def _kill_then_click():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+         app.player.hp = 0
+
+         await pilot.click("#dir-d")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_kill_then_click(), TIMEOUT))
+
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
+   assert "You have already perished" in output
