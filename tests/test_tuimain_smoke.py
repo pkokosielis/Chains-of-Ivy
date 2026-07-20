@@ -337,3 +337,63 @@ def test_tuimain_talk_without_pending_quest_skips_dialog():
    app, output = asyncio.run(asyncio.wait_for(_play(["talk"]), TIMEOUT))
 
    assert "mutter to yourself bitterly" in output
+
+
+def test_tuimain_drop_shows_dialog_and_no_cancels():
+   async def _play_drop_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         for command in ["take all", "drop Gold pocket watch"]:
+            await pilot.click("#command")
+            await pilot.press(*tuple(command))
+            await pilot.press("enter")
+            await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_drop_then_cancel(), TIMEOUT))
+
+   assert "hold onto the Gold pocket watch" in output
+   assert any(item.getName() == "Gold pocket watch" for item in app.player.inventory)
+   assert app.currentRoom.existsItem("Gold pocket watch") is None
+
+
+def test_tuimain_drop_confirmed_removes_item():
+   async def _play_drop_then_confirm():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         for command in ["take all", "drop Gold pocket watch"]:
+            await pilot.click("#command")
+            await pilot.press(*tuple(command))
+            await pilot.press("enter")
+            await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_drop_then_confirm(), TIMEOUT))
+
+   assert "You have dropped the Gold pocket watch" in output
+   assert not any(item.getName() == "Gold pocket watch" for item in app.player.inventory)
+   assert app.currentRoom.existsItem("Gold pocket watch") is not None
+
+
+def test_tuimain_drop_unknown_item_skips_dialog():
+   # If an unowned item name were routed through the confirmation dialog,
+   # this message (produced deep inside doAction) would never be reached.
+   app, output = asyncio.run(asyncio.wait_for(_play(["drop nonexistent item"]), TIMEOUT))
+
+   assert "I don't have a nonexistent item" in output

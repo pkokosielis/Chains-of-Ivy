@@ -177,6 +177,12 @@ class ChainsOfIvyApp(App):
             self.confirmTalk(pendingNpc)
             return
 
+      if action[:5] == "drop ":
+         item = self.player.getItemFromDescription(action[5:])
+         if item is not None:
+            self.confirmDrop(item)
+            return
+
       self.currentRoom = self.nextAction.doAction(self.currentRoom, self.player, action)
 
       if self.player.isDead():
@@ -237,6 +243,18 @@ class ChainsOfIvyApp(App):
             "Turn in your quest item(s) to " + npc.getName() + " for "
             + str(npc.getExpToGive()) + " experience and " + str(npc.getGoldToGive()) + " gold?"
          ),
+         handle_response,
+      )
+
+   def confirmDrop(self, item) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            self.player.dropItem(self.currentRoom, item.getName())
+         else:
+            iowPrint("You decide to hold onto the " + item.getName() + " after all.")
+
+      self.push_screen(
+         ConfirmScreen("Are you sure you want to drop the " + item.getName() + "?"),
          handle_response,
       )
 
