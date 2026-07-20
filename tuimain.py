@@ -9,7 +9,9 @@ if (sys.version_info < (3, 4)):
    sys.exit(1)
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, RichLog, Input
+from textual.containers import Grid
+from textual.screen import ModalScreen
+from textual.widgets import Header, Footer, RichLog, Input, Label, Button
 
 from engine.IOwrappers import *
 from engine.PlayerAction import *
@@ -49,6 +51,56 @@ def initSetting():
 
    # Return the starting room, and the initialized character
    return [getRoomWithID(1), me]
+
+
+class ConfirmScreen(ModalScreen[bool]):
+   """Generic Yes/No confirmation modal dialog."""
+
+   BINDINGS = [("escape", "cancel", "Cancel")]
+
+   CSS = """
+   ConfirmScreen {
+      align: center middle;
+   }
+
+   #confirm-dialog {
+      grid-size: 2;
+      grid-gutter: 1 2;
+      grid-rows: 1fr 3;
+      padding: 1 2;
+      width: 50;
+      height: 9;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #confirm-question {
+      column-span: 2;
+      content-align: center middle;
+   }
+
+   ConfirmScreen Button {
+      width: 100%;
+   }
+   """
+
+   def __init__(self, question: str) -> None:
+      super().__init__()
+      self.question = question
+
+   def compose(self) -> ComposeResult:
+      yield Grid(
+         Label(self.question, id="confirm-question"),
+         Button("Yes", variant="error", id="confirm-yes"),
+         Button("No", variant="primary", id="confirm-no"),
+         id="confirm-dialog",
+      )
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      self.dismiss(event.button.id == "confirm-yes")
+
+   def action_cancel(self) -> None:
+      self.dismiss(False)
 
 
 class ChainsOfIvyApp(App):
@@ -98,14 +150,18 @@ class ChainsOfIvyApp(App):
 
       iowPrint("\n>>: " + action)
 
+      if action == "quit":
+         self.confirmQuit()
+         return
+
+      if action == "restore":
+         self.confirmRestore()
+         return
+
       if self.player.isDead():
          if action == "restart":
             iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
             self.startNewGame()
-         elif action == "restore":
-            self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
-         elif action == "quit":
-            self.nextAction.doQuit()
          else:
             iowPrint("You have already perished. Type 'restart' for a new game, "
                      "'restore' to load a saved game, or 'quit' to exit.")
@@ -116,6 +172,28 @@ class ChainsOfIvyApp(App):
       if self.player.isDead():
          iowPrint("\nYou have perished in battle! GAME OVER.")
          iowPrint("Type 'restart' for a new game, 'restore' to load a saved game, or 'quit' to exit.")
+
+   def confirmQuit(self) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            iowPrint("You are vapourized into the next plane of existence... So long!")
+            self.exit()
+         else:
+            iowPrint("Then onwards you go!")
+
+      self.push_screen(ConfirmScreen("Are you sure you want to quit this game?"), handle_response)
+
+   def confirmRestore(self) -> None:
+      def handle_response(confirmed: bool) -> None:
+         if confirmed:
+            self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
+         else:
+            iowPrint("restore is cancelled.")
+
+      self.push_screen(
+         ConfirmScreen("Are you sure you want to restore the last saved game?\nCurrent progress will be lost."),
+         handle_response,
+      )
 
 
 def main():

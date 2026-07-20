@@ -12,7 +12,7 @@ import asyncio
 import pytest
 from textual.widgets import RichLog
 
-from tuimain import ChainsOfIvyApp
+from tuimain import ChainsOfIvyApp, ConfirmScreen
 
 TIMEOUT = 15
 
@@ -86,3 +86,127 @@ def test_tuimain_restart_after_death_returns_to_playable_state():
 
    assert app.player.isDead() is False
    assert "Chorley Park Study" in output
+
+
+def test_tuimain_quit_shows_dialog_and_no_cancels():
+   async def _play_quit_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         assert app.is_running
+
+         # Confirm the game is still fully playable after cancelling.
+         await pilot.click("#command")
+         await pilot.press(*tuple("look"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_quit_then_cancel(), TIMEOUT))
+
+   assert "Then onwards you go!" in output
+   assert "Chorley Park Study" in output
+   assert app.player.isDead() is False
+
+
+def test_tuimain_quit_confirmed_exits_app():
+   async def _play_quit_then_confirm():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+      return app
+
+   app = asyncio.run(asyncio.wait_for(_play_quit_then_confirm(), TIMEOUT))
+
+   assert app.is_running is False
+   assert app.return_code == 0
+
+
+def test_tuimain_restore_shows_dialog_and_no_cancels(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_restore_then_cancel():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("restore"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-no")
+         await pilot.pause()
+
+         assert app.is_running
+
+         # Confirm the game is still fully playable after cancelling.
+         await pilot.click("#command")
+         await pilot.press(*tuple("look"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_restore_then_cancel(), TIMEOUT))
+
+   assert "restore is cancelled." in output
+   assert "Chorley Park Study" in output
+   assert app.player.isDead() is False
+
+
+def test_tuimain_restore_confirmed_loads_saved_game(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_save_then_move_then_restore():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         log = app.query_one("#log", RichLog)
+
+         for command in ["save", "d"]:
+            await pilot.click("#command")
+            await pilot.press(*tuple(command))
+            await pilot.press("enter")
+            await pilot.pause()
+
+         assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("restore"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app, "\n".join(strip.text for strip in log.lines)
+
+   app, output = asyncio.run(asyncio.wait_for(_play_save_then_move_then_restore(), TIMEOUT))
+
+   assert "Game Restored" in output
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
