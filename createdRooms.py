@@ -64,6 +64,7 @@ iowDebugPrint (debugRooms, "[DEBUG_ROOMS]")
 iowDebugPrint (debugRooms, RoomArray)
 
 # NPCs
+(getRoomWithID(3)).addNPCtoRoom(crow)
 (getRoomWithID(5)).addNPCtoRoom(roxHorseE)
 (getRoomWithID(6)).addNPCtoRoom(roxHorseW)
 (getRoomWithID(7)).addNPCtoRoom(ttcAutomaton)

@@ -34,7 +34,7 @@ class StoreKeeper:
 
    def listStoreItems(self, character, room):
       iowWrapPrint (self.getWelcomeMessage())
-      iowWrapPrint ("Avaiable for Sale at " + self.getStoreName())
+      iowWrapPrint ("Available for Sale at " + self.getStoreName())
       iowWrapPrint ("-------------------------------------------")
       for item in self.itemsToSell:
          iowWrapPrint(" * " + item.getName() + "  [" + str(item.getItemValue()) + " gold]")

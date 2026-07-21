@@ -5,7 +5,7 @@ These are semi-colon delimited CSV files.
 1) monsterList.csv
 
 Add your monsters here in the following format
-monster name ; Hit Points ; Armor Class ; attack desc ; experience points given ; items given ; gold given
+monster name ; Hit Points ; max damage points (the most this monster can hit for) ; attack desc ; experience points given ; items given ; gold given
 
    eg)
    Rebel Automaton;25;20;swings switchblade;30;None;30
