@@ -16,14 +16,31 @@ from engine.Item import Item
 from engine.NPC import NPC
 from engine.Room import Room
 from engine.StoreKeeper import StoreKeeper
-from tuimain import ChainsOfIvyApp, ConfirmScreen
+from tuimain import (
+   ChainsOfIvyApp,
+   ConfirmScreen,
+   ExitScreen,
+   LoadPickerScreen,
+   PostSaveScreen,
+   SaveNameScreen,
+   StartScreen,
+)
 
 TIMEOUT = 15
+
+
+async def _startNewGame(pilot):
+   """Dismiss the launch dialog (New Game / Restore Saved Game) that now
+   appears on mount, so tests land in the same playable state they did
+   before the dialog was added."""
+   await pilot.click("#start-new")
+   await pilot.pause()
 
 
 async def _play(commands):
    app = ChainsOfIvyApp()
    async with app.run_test() as pilot:
+      await _startNewGame(pilot)
       log = app.query_one("#log", RichLog)
       for command in commands:
          await pilot.click("#command")
@@ -50,6 +67,7 @@ def test_tuimain_save_shows_dialog_and_no_cancels(tmp_path, monkeypatch):
    async def _play_save_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          await pilot.click("#command")
@@ -77,6 +95,7 @@ def test_tuimain_save_confirmed_does_not_hang(tmp_path, monkeypatch):
    async def _play_save_then_confirm():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          await pilot.click("#command")
          await pilot.press(*tuple("save"))
          await pilot.press("enter")
@@ -103,6 +122,7 @@ def test_tuimain_restart_after_death_returns_to_playable_state():
    async def _play_then_kill_then_restart():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          # Kill the player directly, mirroring death mid-battle, then confirm
@@ -132,10 +152,11 @@ def test_tuimain_restart_after_death_returns_to_playable_state():
    assert "Chorley Park Study" in output
 
 
-def test_tuimain_quit_shows_dialog_and_no_cancels():
+def test_tuimain_quit_shows_exit_dialog_and_cancel_resumes_play():
    async def _play_quit_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          await pilot.click("#command")
@@ -143,9 +164,9 @@ def test_tuimain_quit_shows_dialog_and_no_cancels():
          await pilot.press("enter")
          await pilot.pause()
 
-         assert isinstance(app.screen, ConfirmScreen)
+         assert isinstance(app.screen, ExitScreen)
 
-         await pilot.click("#confirm-no")
+         await pilot.click("#exit-cancel")
          await pilot.pause()
 
          assert app.is_running
@@ -165,26 +186,305 @@ def test_tuimain_quit_shows_dialog_and_no_cancels():
    assert app.player.isDead() is False
 
 
-def test_tuimain_quit_confirmed_exits_app():
-   async def _play_quit_then_confirm():
+def test_tuimain_quit_exit_without_saving_exits_app():
+   async def _play_quit_then_discard():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          await pilot.click("#command")
          await pilot.press(*tuple("quit"))
          await pilot.press("enter")
          await pilot.pause()
 
-         assert isinstance(app.screen, ConfirmScreen)
+         assert isinstance(app.screen, ExitScreen)
 
-         await pilot.click("#confirm-yes")
+         await pilot.click("#exit-discard")
          await pilot.pause()
 
       return app
 
-   app = asyncio.run(asyncio.wait_for(_play_quit_then_confirm(), TIMEOUT))
+   app = asyncio.run(asyncio.wait_for(_play_quit_then_discard(), TIMEOUT))
 
    assert app.is_running is False
    assert app.return_code == 0
+
+
+def test_tuimain_exit_button_opens_same_exit_dialog_as_typed_quit():
+   async def _click_exit_button():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         await pilot.click("#exit-button")
+         await pilot.pause()
+
+         screenType = type(app.screen).__name__
+
+         await pilot.click("#exit-cancel")
+         await pilot.pause()
+
+         return screenType, app.is_running
+
+   screenType, isRunning = asyncio.run(asyncio.wait_for(_click_exit_button(), TIMEOUT))
+
+   assert screenType == "ExitScreen"
+   assert isRunning
+
+
+def test_tuimain_quit_save_game_prompts_name_then_continue_keeps_playing(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_quit_save_then_continue():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ExitScreen)
+         await pilot.click("#exit-save")
+         await pilot.pause()
+
+         assert isinstance(app.screen, SaveNameScreen)
+         await pilot.click("#save-name-input")
+         await pilot.press(*tuple("My Save"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, PostSaveScreen)
+         await pilot.click("#post-save-continue")
+         await pilot.pause()
+
+         # Check while still inside run_test(): exiting the context manager
+         # itself shuts the test harness down, so is_running would read
+         # False here regardless of whether "Continue" actually kept the
+         # app alive.
+         return app.is_running
+
+   isRunning = asyncio.run(asyncio.wait_for(_play_quit_save_then_continue(), TIMEOUT))
+
+   assert isRunning
+   assert (tmp_path / "saves" / "My Save.dat").exists()
+
+
+def test_tuimain_quit_save_game_then_exit_stops_app(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_quit_save_then_exit():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         await pilot.click("#exit-save")
+         await pilot.pause()
+
+         await pilot.click("#save-name-input")
+         await pilot.press(*tuple("Before Boss"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, PostSaveScreen)
+         await pilot.click("#post-save-exit")
+         await pilot.pause()
+
+      return app
+
+   app = asyncio.run(asyncio.wait_for(_play_quit_save_then_exit(), TIMEOUT))
+
+   assert app.is_running is False
+   assert (tmp_path / "saves" / "Before Boss.dat").exists()
+
+
+def test_tuimain_save_name_screen_rejects_blank_name(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _submit_blank_name():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         await pilot.click("#exit-save")
+         await pilot.pause()
+
+         await pilot.click("#save-name-input")
+         await pilot.press("enter")
+         await pilot.pause()
+
+         errorVisible = "visible" in app.screen.query_one("#save-name-error").classes
+         stillOnSaveNameScreen = isinstance(app.screen, SaveNameScreen)
+         return errorVisible, stillOnSaveNameScreen
+
+   errorVisible, stillOnSaveNameScreen = asyncio.run(asyncio.wait_for(_submit_blank_name(), TIMEOUT))
+
+   assert errorVisible
+   assert stillOnSaveNameScreen
+   assert not (tmp_path / "saves").exists()
+
+
+def test_tuimain_load_command_with_no_saves_shows_empty_picker(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _play_load_with_no_saves():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("load"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         noSavesShown = len(app.screen.query("#load-picker-list Label")) == 1
+
+         await pilot.click("#load-picker-cancel")
+         await pilot.pause()
+
+         return noSavesShown, "\n".join(strip.text for strip in log.lines)
+
+   noSavesShown, output = asyncio.run(asyncio.wait_for(_play_load_with_no_saves(), TIMEOUT))
+
+   assert noSavesShown
+   assert "load is cancelled." in output
+
+
+def test_tuimain_load_command_picks_and_restores_named_save(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _save_move_then_load():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         # Save the starting room under a name.
+         await pilot.click("#command")
+         await pilot.press(*tuple("quit"))
+         await pilot.press("enter")
+         await pilot.pause()
+         await pilot.click("#exit-save")
+         await pilot.pause()
+         await pilot.click("#save-name-input")
+         await pilot.press(*tuple("Study Snapshot"))
+         await pilot.press("enter")
+         await pilot.pause()
+         await pilot.click("#post-save-continue")
+         await pilot.pause()
+
+         # Move away from the saved room.
+         await pilot.click("#command")
+         await pilot.press(*tuple("d"))
+         await pilot.press("enter")
+         await pilot.pause()
+         assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
+
+         # Load the named save back.
+         await pilot.click("#command")
+         await pilot.press(*tuple("load"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         await pilot.click("#load-pick-0")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app
+
+   app = asyncio.run(asyncio.wait_for(_save_move_then_load(), TIMEOUT))
+
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
+
+
+def test_tuimain_start_screen_shows_banner_and_new_game_starts_playable():
+   async def _check_start_screen():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         assert isinstance(app.screen, StartScreen)
+         bannerText = str(app.screen.query_one("#start-banner").renderable)
+
+         await pilot.click("#start-new")
+         await pilot.pause()
+
+         return bannerText, app.player is not None, app.currentRoom is not None
+
+   bannerText, hasPlayer, hasRoom = asyncio.run(asyncio.wait_for(_check_start_screen(), TIMEOUT))
+
+   assert "Chains of Ivy" in bannerText
+   assert hasPlayer
+   assert hasRoom
+
+
+def test_tuimain_start_screen_restore_saved_game_loads_named_save(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _save_then_relaunch():
+      firstApp = ChainsOfIvyApp()
+      async with firstApp.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("d"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         firstApp.nextAction.doNamedSave(firstApp.currentRoom, firstApp.player, "Launch Save")
+
+      secondApp = ChainsOfIvyApp()
+      async with secondApp.run_test() as pilot:
+         assert isinstance(secondApp.screen, StartScreen)
+
+         await pilot.click("#start-restore")
+         await pilot.pause()
+
+         assert isinstance(secondApp.screen, LoadPickerScreen)
+         await pilot.click("#load-pick-0")
+         await pilot.pause()
+
+         return secondApp
+
+   app = asyncio.run(asyncio.wait_for(_save_then_relaunch(), TIMEOUT))
+
+   assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
+
+
+def test_tuimain_start_screen_restore_with_no_saves_falls_back_to_new_game(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _restore_with_no_saves():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         assert isinstance(app.screen, StartScreen)
+
+         await pilot.click("#start-restore")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         await pilot.click("#load-picker-cancel")
+         await pilot.pause()
+
+         return app
+
+   app = asyncio.run(asyncio.wait_for(_restore_with_no_saves(), TIMEOUT))
+
+   assert app.player is not None
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
 
 
 def test_tuimain_restore_shows_dialog_and_no_cancels(tmp_path, monkeypatch):
@@ -193,6 +493,7 @@ def test_tuimain_restore_shows_dialog_and_no_cancels(tmp_path, monkeypatch):
    async def _play_restore_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          await pilot.click("#command")
@@ -228,6 +529,7 @@ def test_tuimain_restore_confirmed_loads_saved_game(tmp_path, monkeypatch):
    async def _play_save_then_move_then_restore():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          await pilot.click("#command")
@@ -278,6 +580,7 @@ def test_tuimain_talk_quest_turn_in_shows_dialog_and_no_cancels():
    async def _play_talk_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          room, npc, questItem = _build_pending_quest_room()
@@ -308,6 +611,7 @@ def test_tuimain_talk_quest_turn_in_confirmed_completes_quest():
    async def _play_talk_then_confirm():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          room, npc, questItem = _build_pending_quest_room()
          app.currentRoom = room
          app.player.addToInventory(questItem)
@@ -344,6 +648,7 @@ def test_tuimain_drop_shows_dialog_and_no_cancels():
    async def _play_drop_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          for command in ["take all", "drop Gold pocket watch"]:
@@ -370,6 +675,7 @@ def test_tuimain_drop_confirmed_removes_item():
    async def _play_drop_then_confirm():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          for command in ["take all", "drop Gold pocket watch"]:
@@ -415,6 +721,7 @@ def test_tuimain_buy_shows_dialog_and_no_cancels():
    async def _play_buy_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          room, storeKeeper, item = _build_store_room()
@@ -444,6 +751,7 @@ def test_tuimain_buy_confirmed_completes_purchase():
    async def _play_buy_then_confirm():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          room, storeKeeper, item = _build_store_room()
@@ -473,6 +781,7 @@ def test_tuimain_buy_unknown_item_skips_dialog():
    async def _play_buy_unknown():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          room, storeKeeper, item = _build_store_room()
@@ -494,6 +803,7 @@ def test_tuimain_buy_insufficient_gold_skips_dialog():
    async def _play_buy_too_poor():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          room, storeKeeper, item = _build_store_room()
@@ -527,6 +837,7 @@ def test_tuimain_inventory_panel_starts_empty():
    async def _check_empty_panel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          await pilot.pause()
          assert len(app.query("#inventory-empty")) == 1
          assert len(app.query(".inventory-row")) == 0
@@ -538,6 +849,7 @@ def test_tuimain_inventory_panel_lists_items_after_take():
    async def _take_and_inspect_panel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          room, weapon, suit = _build_two_item_room()
          app.currentRoom = room
 
@@ -562,6 +874,7 @@ def test_tuimain_inventory_use_button_equips_and_disables():
    async def _use_via_panel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          room, weapon, suit = _build_two_item_room()
          app.currentRoom = room
 
@@ -588,6 +901,7 @@ def test_tuimain_inventory_drop_button_shows_dialog_and_no_cancels():
    async def _drop_via_panel_then_cancel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
          room, weapon, suit = _build_two_item_room()
          app.currentRoom = room
@@ -620,6 +934,7 @@ def test_tuimain_inventory_drop_button_confirmed_clears_equipped_slot():
    async def _use_then_drop_via_panel():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          room, weapon, suit = _build_two_item_room()
          app.currentRoom = room
 
@@ -655,6 +970,7 @@ def test_tuimain_stats_pane_shows_and_updates_character_stats():
    async def _check_stats_pane():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          statsPane = app.query_one("#stats-pane", Static)
          initialText = str(statsPane.renderable)
 
@@ -679,6 +995,7 @@ def test_tuimain_direction_buttons_reflect_room_exits():
    async def _check_direction_buttons():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          await pilot.pause()
          disabledById = {
             buttonId: app.query_one("#" + buttonId, Button).disabled
@@ -701,6 +1018,7 @@ def test_tuimain_direction_button_click_moves_player():
    async def _click_down():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
          await pilot.click("#dir-d")
@@ -718,6 +1036,7 @@ def test_tuimain_direction_button_disabled_after_dead():
    async def _kill_then_click():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
+         await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
          app.player.hp = 0
 

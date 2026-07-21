@@ -103,6 +103,274 @@ class ConfirmScreen(ModalScreen[bool]):
       self.dismiss(False)
 
 
+class ExitScreen(ModalScreen[str]):
+   """Exit dialog offering Save Game / Exit without saving / Cancel."""
+
+   BINDINGS = [("escape", "cancel", "Cancel")]
+
+   CSS = """
+   ExitScreen {
+      align: center middle;
+   }
+
+   #exit-dialog {
+      padding: 1 2;
+      width: 50;
+      height: auto;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #exit-question {
+      content-align: center middle;
+      padding: 0 0 1 0;
+   }
+
+   #exit-dialog Button {
+      width: 100%;
+      margin: 0 0 1 0;
+   }
+   """
+
+   def compose(self) -> ComposeResult:
+      with Vertical(id="exit-dialog"):
+         yield Label("What would you like to do?", id="exit-question")
+         yield Button("Save Game", id="exit-save", variant="primary")
+         yield Button("Exit without saving", id="exit-discard", variant="error")
+         yield Button("Cancel", id="exit-cancel")
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      self.dismiss(event.button.id)
+
+   def action_cancel(self) -> None:
+      self.dismiss("exit-cancel")
+
+
+class SaveNameScreen(ModalScreen[str]):
+   """Prompts for a name to save the game under."""
+
+   BINDINGS = [("escape", "cancel", "Cancel")]
+
+   CSS = """
+   SaveNameScreen {
+      align: center middle;
+   }
+
+   #save-name-dialog {
+      padding: 1 2;
+      width: 50;
+      height: auto;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #save-name-question {
+      content-align: center middle;
+      padding: 0 0 1 0;
+   }
+
+   #save-name-error {
+      color: $error;
+      padding: 1 0 0 0;
+      display: none;
+   }
+
+   #save-name-error.visible {
+      display: block;
+   }
+
+   #save-name-buttons {
+      height: auto;
+      margin: 1 0 0 0;
+   }
+
+   #save-name-buttons Button {
+      width: 1fr;
+   }
+   """
+
+   def compose(self) -> ComposeResult:
+      with Vertical(id="save-name-dialog"):
+         yield Label("Name this save:", id="save-name-question")
+         yield Input(placeholder="e.g. before-the-boss", id="save-name-input")
+         yield Label("Please enter a valid name.", id="save-name-error")
+         with Horizontal(id="save-name-buttons"):
+            yield Button("Save", id="save-name-confirm", variant="primary")
+            yield Button("Cancel", id="save-name-cancel")
+
+   def on_mount(self) -> None:
+      self.query_one("#save-name-input", Input).focus()
+
+   def on_input_submitted(self, event: Input.Submitted) -> None:
+      event.stop()
+      self.trySubmit()
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      if event.button.id == "save-name-confirm":
+         self.trySubmit()
+      else:
+         self.dismiss(None)
+
+   def trySubmit(self) -> None:
+      cleanName = sanitizeSaveName(self.query_one("#save-name-input", Input).value)
+      if not cleanName:
+         self.query_one("#save-name-error", Label).add_class("visible")
+         return
+      self.dismiss(cleanName)
+
+   def action_cancel(self) -> None:
+      self.dismiss(None)
+
+
+class PostSaveScreen(ModalScreen[bool]):
+   """After saving, offers to continue playing or exit."""
+
+   BINDINGS = [("escape", "cancel", "Cancel")]
+
+   CSS = """
+   PostSaveScreen {
+      align: center middle;
+   }
+
+   #post-save-dialog {
+      grid-size: 2;
+      grid-gutter: 1 2;
+      grid-rows: 1fr 3;
+      padding: 1 2;
+      width: 50;
+      height: 9;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #post-save-question {
+      column-span: 2;
+      content-align: center middle;
+   }
+
+   PostSaveScreen Button {
+      width: 100%;
+   }
+   """
+
+   def compose(self) -> ComposeResult:
+      yield Grid(
+         Label("Game saved! Continue playing?", id="post-save-question"),
+         Button("Continue", id="post-save-continue", variant="primary"),
+         Button("Exit", id="post-save-exit", variant="error"),
+         id="post-save-dialog",
+      )
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      self.dismiss(event.button.id == "post-save-continue")
+
+   def action_cancel(self) -> None:
+      self.dismiss(True)
+
+
+class LoadPickerScreen(ModalScreen[str]):
+   """Lists named saves for the player to choose from."""
+
+   BINDINGS = [("escape", "cancel", "Cancel")]
+
+   CSS = """
+   LoadPickerScreen {
+      align: center middle;
+   }
+
+   #load-picker-dialog {
+      padding: 1 2;
+      width: 50;
+      height: auto;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #load-picker-title {
+      content-align: center middle;
+      padding: 0 0 1 0;
+   }
+
+   #load-picker-list {
+      height: auto;
+      max-height: 20;
+   }
+
+   #load-picker-dialog Button {
+      width: 100%;
+      margin: 0 0 1 0;
+   }
+   """
+
+   def __init__(self, saveNames) -> None:
+      super().__init__()
+      self.saveNames = saveNames
+      self.pickButtons = {}
+
+   def compose(self) -> ComposeResult:
+      with Vertical(id="load-picker-dialog"):
+         yield Label("Load which saved game?", id="load-picker-title")
+         with VerticalScroll(id="load-picker-list"):
+            if not self.saveNames:
+               yield Label("No saved games found.")
+            for index, name in enumerate(self.saveNames):
+               buttonId = "load-pick-" + str(index)
+               self.pickButtons[buttonId] = name
+               yield Button(name, id=buttonId)
+         yield Button("Cancel", id="load-picker-cancel")
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      name = self.pickButtons.get(event.button.id or "")
+      self.dismiss(name)
+
+   def action_cancel(self) -> None:
+      self.dismiss(None)
+
+
+class StartScreen(ModalScreen[str]):
+   """Launch dialog: choose New Game or Restore Saved Game.
+
+   #start-banner is a text placeholder standing in for a banner image
+   to be added later.
+   """
+
+   CSS = """
+   StartScreen {
+      align: center middle;
+   }
+
+   #start-dialog {
+      padding: 2 4;
+      width: 60;
+      height: auto;
+      border: thick $accent;
+      background: $surface;
+   }
+
+   #start-banner {
+      text-style: bold;
+      content-align: center middle;
+      height: 5;
+      border: round $accent;
+      margin: 0 0 2 0;
+   }
+
+   #start-dialog Button {
+      width: 100%;
+      margin: 0 0 1 0;
+   }
+   """
+
+   def compose(self) -> ComposeResult:
+      with Vertical(id="start-dialog"):
+         yield Static("Chains of Ivy", id="start-banner")
+         yield Button("New Game", id="start-new", variant="primary")
+         yield Button("Restore Saved Game", id="start-restore")
+
+   def on_button_pressed(self, event: Button.Pressed) -> None:
+      self.dismiss(event.button.id)
+
+
 class ChainsOfIvyApp(App):
 
    TITLE = "Chains of Ivy"
@@ -113,12 +381,23 @@ class ChainsOfIvyApp(App):
       background: $surface;
    }
 
+   #top-bar {
+      height: auto;
+      margin: 0 0 1 0;
+   }
+
    #stats-pane {
+      width: 1fr;
       height: auto;
       border: round $accent;
       background: $surface;
       padding: 0 1;
-      margin: 0 0 1 0;
+      margin: 0 1 0 0;
+   }
+
+   #exit-button {
+      width: auto;
+      min-width: 10;
    }
 
    #game-pane {
@@ -170,7 +449,6 @@ class ChainsOfIvyApp(App):
 
    #direction-title {
       text-style: bold;
-      padding: 0 0 1 0;
    }
 
    #direction-compass {
@@ -179,7 +457,6 @@ class ChainsOfIvyApp(App):
 
    #direction-updown {
       height: auto;
-      margin: 1 0 0 0;
    }
 
    .direction-btn {
@@ -209,7 +486,9 @@ class ChainsOfIvyApp(App):
    def compose(self) -> ComposeResult:
       yield Header()
       with Vertical(id="app-body"):
-         yield Static(id="stats-pane")
+         with Horizontal(id="top-bar"):
+            yield Static(id="stats-pane")
+            yield Button("Exit", id="exit-button", variant="error")
          with Horizontal(id="main-pane"):
             with Vertical(id="game-pane"):
                yield RichLog(id="log", wrap=True, markup=False, highlight=False)
@@ -236,9 +515,26 @@ class ChainsOfIvyApp(App):
       iowSetViewer(RichLogViewer(log, command))
 
       iowPrint("Chains of Ivy\n")
-      self.startNewGame()
+      self.push_screen(StartScreen(), self.handleStartChoice)
+
+   async def handleStartChoice(self, choice: str) -> None:
+      if choice == "start-restore":
+         self.push_screen(
+            LoadPickerScreen(self.nextAction.listNamedSaves()), self.handleStartRestorePick)
+      else:
+         self.startNewGame()
+         await self.finishStartup()
+
+   async def handleStartRestorePick(self, name) -> None:
+      if name:
+         self.currentRoom, self.player = self.nextAction.doNamedRestore(None, None, name)
+      if not name or self.currentRoom is None:
+         self.startNewGame()
+      await self.finishStartup()
+
+   async def finishStartup(self) -> None:
       await self.refreshUI()
-      command.focus()
+      self.query_one("#command", Input).focus()
 
    def startNewGame(self) -> None:
       self.nextAction = PlayerAction()
@@ -248,6 +544,9 @@ class ChainsOfIvyApp(App):
       self.currentRoom.displayRoom()
 
    async def on_input_submitted(self, event: Input.Submitted) -> None:
+      if event.input.id != "command":
+         return
+
       action = event.value.strip()
       event.input.value = ""
       if not action:
@@ -256,11 +555,15 @@ class ChainsOfIvyApp(App):
       iowPrint("\n>>: " + action)
 
       if action == "quit":
-         self.confirmQuit()
+         self.confirmExit()
          return
 
       if action == "restore":
          self.confirmRestore()
+         return
+
+      if action == "load":
+         self.confirmLoad()
          return
 
       if self.player.isDead():
@@ -307,15 +610,54 @@ class ChainsOfIvyApp(App):
          iowPrint("\nYou have perished in battle! GAME OVER.")
          iowPrint("Type 'restart' for a new game, 'restore' to load a saved game, or 'quit' to exit.")
 
-   def confirmQuit(self) -> None:
-      def handle_response(confirmed: bool) -> None:
-         if confirmed:
+   def confirmExit(self) -> None:
+      async def handle_choice(choice: str) -> None:
+         if choice == "exit-save":
+            await self.promptSaveThenExit()
+         elif choice == "exit-discard":
             iowPrint("You are vapourized into the next plane of existence... So long!")
             self.exit()
          else:
             iowPrint("Then onwards you go!")
 
-      self.push_screen(ConfirmScreen("Are you sure you want to quit this game?"), handle_response)
+      self.push_screen(ExitScreen(), handle_choice)
+
+   async def promptSaveThenExit(self) -> None:
+      async def handle_name(name) -> None:
+         if not name:
+            iowPrint("Then onwards you go!")
+            return
+
+         self.nextAction.doNamedSave(self.currentRoom, self.player, name)
+
+         async def handle_continue(continuePlaying: bool) -> None:
+            if not continuePlaying:
+               self.exit()
+
+         self.push_screen(PostSaveScreen(), handle_continue)
+
+      self.push_screen(SaveNameScreen(), handle_name)
+
+   def confirmLoad(self) -> None:
+      async def handle_pick(name) -> None:
+         if not name:
+            iowPrint("load is cancelled.")
+            return
+
+         async def handle_response(confirmed: bool) -> None:
+            if confirmed:
+               self.currentRoom, self.player = self.nextAction.doNamedRestore(
+                  self.currentRoom, self.player, name)
+               await self.refreshUI()
+            else:
+               iowPrint("load is cancelled.")
+
+         self.push_screen(
+            ConfirmScreen("Load the saved game \"" + name + "\"?\nCurrent progress will be lost."),
+            handle_response,
+         )
+
+      self.push_screen(LoadPickerScreen(self.nextAction.listNamedSaves()), handle_pick)
 
    def confirmRestore(self) -> None:
       async def handle_response(confirmed: bool) -> None:
@@ -450,6 +792,10 @@ class ChainsOfIvyApp(App):
 
    async def on_button_pressed(self, event: Button.Pressed) -> None:
       buttonId = event.button.id or ""
+
+      if buttonId == "exit-button":
+         self.confirmExit()
+         return
 
       if buttonId.startswith("dir-"):
          if self.player.isDead():

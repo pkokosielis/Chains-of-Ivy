@@ -1,5 +1,6 @@
 import os
 import pickle
+import re
 
 from random import randint
 from engine.IOwrappers import *
@@ -8,6 +9,10 @@ from engine.Room import *
 
 gSavedSettingFileName = "game.dat"
 gSavedPlayerFileName = "player.dat"
+gSavesDirectory = "saves"
+
+def sanitizeSaveName(name):
+   return re.sub(r'[^A-Za-z0-9 _-]', '', name).strip()
 
 class PlayerAction:
 
@@ -27,12 +32,13 @@ class PlayerAction:
           self.action == "u" or self.action == "d"):
          self.type = "Move"
 
-      elif (self.action == "look" or self.action[:5] == "take " or 
+      elif (self.action == "look" or self.action[:5] == "take " or
             self.action[:5] == "drop " or self.action == "inventory" or
             self.action == "stats" or self.action == "talk" or
-            self.action == "save" or self.action == "restore" or 
-            self.action == "quit" or self.action[:4] == "use " or
-            self.action[:4] == "buy " or self.action == "help"):
+            self.action == "save" or self.action == "restore" or
+            self.action == "load" or self.action == "quit" or
+            self.action[:4] == "use " or self.action[:4] == "buy " or
+            self.action == "help"):
          self.type = "Admin"
 
       elif (self.action == "attack"):
@@ -75,7 +81,8 @@ class PlayerAction:
       iowPrint ("attack - attack all enemies")
       iowPrint ("save - save current game")
       iowPrint ("restore - restore the saved game")
-      iowPrint ("quit - quit the game")
+      iowPrint ("load - load a named saved game")
+      iowPrint ("quit - quit the game (with the option to save under a name first)")
       iowPrint ("help - Print this message") 
 
    def doSave(self, room, character):
@@ -99,6 +106,34 @@ class PlayerAction:
       else:
          iowPrint ("Sorry, there isn't a saved game to restore.")
       return [room, character]
+
+   def namedSavePath(self, name):
+      return os.path.join(gSavesDirectory, name + ".dat")
+
+   def doNamedSave(self, room, character, name):
+      os.makedirs(gSavesDirectory, exist_ok=True)
+      with open(self.namedSavePath(name), 'wb') as output:
+         pickle.dump(room, output, pickle.HIGHEST_PROTOCOL)
+         pickle.dump(character, output, pickle.HIGHEST_PROTOCOL)
+      iowPrint ("Game saved as \"" + name + "\".")
+
+   def doNamedRestore(self, room, character, name):
+      path = self.namedSavePath(name)
+      if os.path.exists(path):
+         with open(path, 'rb') as fh:
+            room = pickle.load(fh)
+            character = pickle.load(fh)
+         iowPrint ("You find your being transported through time and space! Game Restored.\n")
+         room.displayRoom()
+      else:
+         iowPrint ("Sorry, there isn't a saved game named \"" + name + "\".")
+      return [room, character]
+
+   def listNamedSaves(self):
+      if not os.path.isdir(gSavesDirectory):
+         return []
+      return sorted(fileName[:-len(".dat")] for fileName in os.listdir(gSavesDirectory)
+                     if fileName.endswith(".dat"))
 
    def doAdminAction(self, room, character):
       if self.action == "look":
