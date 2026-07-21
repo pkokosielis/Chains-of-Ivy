@@ -362,6 +362,81 @@ def test_tuimain_load_command_with_no_saves_shows_empty_picker(tmp_path, monkeyp
    assert "load is cancelled." in output
 
 
+def test_tuimain_load_command_with_corrupted_save_reports_error_instead_of_crashing(tmp_path, monkeypatch):
+   """Regression test: doNamedRestore's UnpicklingError used to propagate
+   straight out of the dismiss callback and crash the whole app."""
+   monkeypatch.chdir(tmp_path)
+   savesDir = tmp_path / "saves"
+   savesDir.mkdir()
+   (savesDir / "Broken.dat").write_text("not a valid pickle file")
+
+   async def _play_load_corrupted_save():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+         log = app.query_one("#log", RichLog)
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("load"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         await pilot.click("#load-pick-0")
+         await pilot.pause()
+
+         assert isinstance(app.screen, ConfirmScreen)
+         await pilot.click("#confirm-yes")
+         await pilot.pause()
+
+         return app.is_running, "\n".join(strip.text for strip in log.lines)
+
+   isRunning, output = asyncio.run(asyncio.wait_for(_play_load_corrupted_save(), TIMEOUT))
+
+   assert isRunning
+   assert "could not be loaded" in output
+
+
+def test_tuimain_start_screen_restore_with_corrupted_save_falls_back_to_new_game(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+   savesDir = tmp_path / "saves"
+   savesDir.mkdir()
+   (savesDir / "Broken.dat").write_text("not a valid pickle file")
+
+   async def _restore_corrupted_save():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         assert isinstance(app.screen, StartScreen)
+
+         await pilot.click("#start-restore")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         await pilot.click("#load-pick-0")
+         await pilot.pause()
+
+         return app
+
+   app = asyncio.run(asyncio.wait_for(_restore_corrupted_save(), TIMEOUT))
+
+   assert app.player is not None
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
+
+
+def test_tuimain_start_screen_escape_starts_new_game():
+   async def _press_escape_at_launch():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await pilot.press("escape")
+         await pilot.pause()
+         return app.player is not None, app.currentRoom
+
+   hasPlayer, room = asyncio.run(asyncio.wait_for(_press_escape_at_launch(), TIMEOUT))
+
+   assert hasPlayer
+   assert room.getTitle() == "Chorley Park Study"
+
+
 def test_tuimain_load_command_picks_and_restores_named_save(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
 
@@ -964,6 +1039,39 @@ def test_tuimain_inventory_drop_button_confirmed_clears_equipped_slot():
    assert weaponIsNone
    assert not hasWeapon
    assert rowCount == 1
+
+
+def test_tuimain_inventory_drop_button_stays_clickable_with_long_item_name():
+   """Regression test: equipping an item with a long enough name wraps
+   the stats pane onto an extra line, which used to squeeze the
+   inventory list's visible viewport down to nothing and make its
+   buttons unclickable in the default terminal size."""
+   async def _use_then_drop_long_named_item():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+         weapon = Item("An Absurdly Long Ceremonial Weapon Name", "Weapon", 9)
+         room = Room(995, "Test Long Name Room", "A room for testing long item names.", 0, [])
+         room.addItemToRoom(weapon)
+         app.currentRoom = room
+
+         await pilot.click("#command")
+         await pilot.press(*tuple("take all"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         await pilot.click("#inv-use-0")
+         await pilot.pause()
+
+         clicked = await pilot.click("#inv-drop-0")
+         await pilot.pause()
+
+         return clicked, isinstance(app.screen, ConfirmScreen)
+
+   clicked, showsConfirm = asyncio.run(asyncio.wait_for(_use_then_drop_long_named_item(), TIMEOUT))
+
+   assert clicked
+   assert showsConfirm
 
 
 def test_tuimain_stats_pane_shows_and_updates_character_stats():

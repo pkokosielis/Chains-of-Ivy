@@ -1,10 +1,10 @@
 #!/usr/bin/python
 import sys
 
-if (sys.version_info < (3, 4)):
+if (sys.version_info < (3, 8)):
    print ("\n*******************************************************************\n\n")
    print ("Error starting up Chains of Ivy!!!\n\n")
-   print ("Your python interpreter is too old. Retry with python version 3.4 or higher")
+   print ("Your python interpreter is too old. Retry with python version 3.8 or higher")
    print ("\n*******************************************************************\n\n")
    sys.exit(1)
 
@@ -29,7 +29,11 @@ class RichLogViewer:
 
    def write(self, msg):
       self.logWidget.write(msg)
-      self.inputWidget.focus()
+      # Only steal focus back to the command input when it's actually on
+      # the active screen - otherwise a print happening while a modal
+      # dialog is up would yank focus away from that dialog's own widget.
+      if self.inputWidget.screen is self.inputWidget.app.screen:
+         self.inputWidget.focus()
 
 
 def initSetting():
@@ -334,6 +338,8 @@ class StartScreen(ModalScreen[str]):
    to be added later.
    """
 
+   BINDINGS = [("escape", "start_new", "New Game")]
+
    CSS = """
    StartScreen {
       align: center middle;
@@ -369,6 +375,9 @@ class StartScreen(ModalScreen[str]):
 
    def on_button_pressed(self, event: Button.Pressed) -> None:
       self.dismiss(event.button.id)
+
+   def action_start_new(self) -> None:
+      self.dismiss("start-new")
 
 
 class ChainsOfIvyApp(App):
@@ -422,6 +431,7 @@ class ChainsOfIvyApp(App):
 
    #inventory-list {
       height: 1fr;
+      min-height: 8;
    }
 
    .inventory-row {
@@ -527,7 +537,9 @@ class ChainsOfIvyApp(App):
 
    async def handleStartRestorePick(self, name) -> None:
       if name:
-         self.currentRoom, self.player = self.nextAction.doNamedRestore(None, None, name)
+         restored = self.tryRestore(self.nextAction.doNamedRestore, None, None, name)
+         if restored is not None:
+            self.currentRoom, self.player = restored
       if not name or self.currentRoom is None:
          self.startNewGame()
       await self.finishStartup()
@@ -610,6 +622,28 @@ class ChainsOfIvyApp(App):
          iowPrint("\nYou have perished in battle! GAME OVER.")
          iowPrint("Type 'restart' for a new game, 'restore' to load a saved game, or 'quit' to exit.")
 
+   def tryRestore(self, restoreFn, *args):
+      """Runs a PlayerAction restore/load call, reporting failure (a
+      missing, corrupted, or unreadable save file) instead of letting
+      the exception crash the app. Returns the [room, character] pair
+      on success, or None on failure."""
+      try:
+         return restoreFn(*args)
+      except Exception as exc:
+         iowPrint("That saved game could not be loaded (" + str(exc) + ").")
+         return None
+
+   def trySave(self, saveFn, *args):
+      """Runs a PlayerAction save call, reporting failure (e.g. disk
+      full, permission denied, an invalid filename) instead of letting
+      the exception crash the app. Returns True on success."""
+      try:
+         saveFn(*args)
+         return True
+      except Exception as exc:
+         iowPrint("The game could not be saved (" + str(exc) + ").")
+         return False
+
    def confirmExit(self) -> None:
       async def handle_choice(choice: str) -> None:
          if choice == "exit-save":
@@ -628,7 +662,8 @@ class ChainsOfIvyApp(App):
             iowPrint("Then onwards you go!")
             return
 
-         self.nextAction.doNamedSave(self.currentRoom, self.player, name)
+         if not self.trySave(self.nextAction.doNamedSave, self.currentRoom, self.player, name):
+            return
 
          async def handle_continue(continuePlaying: bool) -> None:
             if not continuePlaying:
@@ -646,8 +681,10 @@ class ChainsOfIvyApp(App):
 
          async def handle_response(confirmed: bool) -> None:
             if confirmed:
-               self.currentRoom, self.player = self.nextAction.doNamedRestore(
-                  self.currentRoom, self.player, name)
+               restored = self.tryRestore(
+                  self.nextAction.doNamedRestore, self.currentRoom, self.player, name)
+               if restored is not None:
+                  self.currentRoom, self.player = restored
                await self.refreshUI()
             else:
                iowPrint("load is cancelled.")
@@ -662,7 +699,9 @@ class ChainsOfIvyApp(App):
    def confirmRestore(self) -> None:
       async def handle_response(confirmed: bool) -> None:
          if confirmed:
-            self.currentRoom, self.player = self.nextAction.doRestore(self.currentRoom, self.player)
+            restored = self.tryRestore(self.nextAction.doRestore, self.currentRoom, self.player)
+            if restored is not None:
+               self.currentRoom, self.player = restored
             await self.refreshUI()
          else:
             iowPrint("restore is cancelled.")
@@ -675,7 +714,7 @@ class ChainsOfIvyApp(App):
    def confirmSave(self) -> None:
       def handle_response(confirmed: bool) -> None:
          if confirmed:
-            self.nextAction.doSave(self.currentRoom, self.player)
+            self.trySave(self.nextAction.doSave, self.currentRoom, self.player)
          else:
             iowPrint("save is cancelled.")
 
