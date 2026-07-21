@@ -1,5 +1,3 @@
-import pytest
-
 from engine.Character import Character
 from engine.IOwrappers import iowSetViewer
 from engine.Monster import Monster
@@ -100,37 +98,8 @@ def test_attack_defeats_monster_and_awards_rewards(fake_viewer, monkeypatch):
    assert character.experience == 10
 
 
-def test_do_save_prompts_in_cli_mode_and_writes_files(tmp_path, monkeypatch):
+def test_do_save_writes_files(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
-   monkeypatch.setattr("engine.PlayerAction.iowInput", lambda prompt: "y")
-
-   action = PlayerAction()
-   action.doSave(make_room(1, "Start"), Character("Tester"))
-
-   assert (tmp_path / "game.dat").exists()
-   assert (tmp_path / "player.dat").exists()
-
-
-def test_do_save_cli_mode_declines_without_confirmation(tmp_path, monkeypatch):
-   monkeypatch.chdir(tmp_path)
-   monkeypatch.setattr("engine.PlayerAction.iowInput", lambda prompt: "n")
-
-   action = PlayerAction()
-   action.doSave(make_room(1, "Start"), Character("Tester"))
-
-   assert not (tmp_path / "game.dat").exists()
-
-
-def test_do_save_under_viewer_auto_confirms_without_blocking(fake_viewer, tmp_path, monkeypatch):
-   """Regression test: once a viewer/event-driven frontend (tkmain.py,
-   tuimain.py) is active, doSave must not call the blocking iowInput(),
-   or it hangs the whole GUI/TUI app waiting on real terminal input."""
-   monkeypatch.chdir(tmp_path)
-   iowSetViewer(fake_viewer)
-
-   def boom(prompt):
-      raise AssertionError("iowInput must not be called when a viewer is active")
-   monkeypatch.setattr("engine.PlayerAction.iowInput", boom)
 
    action = PlayerAction()
    action.doSave(make_room(1, "Start"), Character("Tester"))
@@ -141,7 +110,6 @@ def test_do_save_under_viewer_auto_confirms_without_blocking(fake_viewer, tmp_pa
 
 def test_do_restore_round_trips_saved_state(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
-   monkeypatch.setattr("engine.PlayerAction.iowInput", lambda prompt: "y")
 
    savedRoom = make_room(5, "Saved Room")
    savedCharacter = Character("Saved Hero")
@@ -156,36 +124,11 @@ def test_do_restore_round_trips_saved_state(tmp_path, monkeypatch):
    assert restoredCharacter.gold == 42
 
 
-def test_do_restore_under_viewer_auto_confirms_without_blocking(fake_viewer, tmp_path, monkeypatch):
-   monkeypatch.chdir(tmp_path)
-   monkeypatch.setattr("engine.PlayerAction.iowInput", lambda prompt: "y")
-   PlayerAction().doSave(make_room(9, "To Restore"), Character("Hero"))
-
+def test_do_restore_without_saved_game_reports_error(fake_viewer):
    iowSetViewer(fake_viewer)
 
-   def boom(prompt):
-      raise AssertionError("iowInput must not be called when a viewer is active")
-   monkeypatch.setattr("engine.PlayerAction.iowInput", boom)
-
-   restoredRoom, restoredCharacter = PlayerAction().doRestore(
+   room, character = PlayerAction().doRestore(
       make_room(1, "Other"), Character("Other"))
 
-   assert restoredRoom.getID() == 9
-   assert restoredCharacter.getName() == "Hero"
-
-
-def test_do_quit_declines_in_cli_mode_without_exiting(monkeypatch):
-   monkeypatch.setattr("engine.PlayerAction.iowInput", lambda prompt: "n")
-
-   PlayerAction().doQuit()  # "n" response should not raise SystemExit
-
-
-def test_do_quit_under_viewer_auto_confirms_without_blocking(fake_viewer, monkeypatch):
-   iowSetViewer(fake_viewer)
-
-   def boom(prompt):
-      raise AssertionError("iowInput must not be called when a viewer is active")
-   monkeypatch.setattr("engine.PlayerAction.iowInput", boom)
-
-   with pytest.raises(SystemExit):
-      PlayerAction().doQuit()
+   assert room.getID() == 1
+   assert "Sorry, there isn't a saved game to restore." in fake_viewer.lines

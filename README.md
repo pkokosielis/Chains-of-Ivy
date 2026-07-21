@@ -5,33 +5,24 @@ stores, and manage an inventory and stats.
 
 Author: Peter Kokosielis
 
-## Frontends
+## Frontend
 
-The game ships two frontends on top of the same engine. The **Textual TUI**
-(`tuimain.py`) is the primary, actively developed frontend; the **CLI**
-(`main.py`) is kept for compatibility but is not a priority for new features.
+The **Textual TUI** (`tuimain.py`) is the only frontend: a scrollable output
+log plus a command input, with modal dialogs to confirm destructive actions
+(quit, save, restore, drop, buy, quest turn-in).
 
-- Textual TUI: a scrollable output log plus a command input, with modal
-  dialogs to confirm destructive actions (quit, restore).
-- CLI: a minimal blocking `input()`-driven command loop in a plain terminal.
-
-Run the TUI:
+Run it:
 
     python3 tuimain.py
-
-Run the CLI:
-
-    python3 main.py
 
 ## Game engine
 
 The `engine/` package holds all game logic and is frontend-agnostic — it
 never touches the terminal directly. Instead it writes through a `viewer`
-object registered via `engine/IOwrappers.py`'s `iowSetViewer()`; each
-frontend supplies its own adapter (`tuimain.py`'s `RichLogViewer` writes to a
-Textual `RichLog` widget, while the CLI leaves no viewer set and falls back
-to plain `print`/`input`). This is also why engine code must never block on
-`input()` directly — doing so would hang the Textual event loop.
+object registered via `engine/IOwrappers.py`'s `iowSetViewer()`, which
+`tuimain.py`'s `RichLogViewer` adapts to write into a Textual `RichLog`
+widget. This is also why engine code must never block on `input()`
+directly — doing so would hang the Textual event loop.
 
 Key pieces:
 

@@ -13,22 +13,12 @@ class PlayerAction:
 
    # actions can be of "Move", "Admin", or "Attack" types
    def __init__(self):
-      self.action = None 
+      self.action = None
       self.type = None
-      self.restoreRequested = "False"
-
-   def getRestoreRequested(self):
-      return self.restoreRequested
-
-   def setRestoreRequested(self):
-      self.restoreRequested = "True"
 
    def getAction(self, action):
-      if (iowGetViewer() != None):
-         self.action = action 
-      else:
-         self.action = iowInput(">>: ")
-      
+      self.action = action
+
    def getActionType(self):
       self.type = "Bad" 
 
@@ -88,78 +78,27 @@ class PlayerAction:
       iowPrint ("quit - quit the game")
       iowPrint ("help - Print this message") 
 
-   def doSaveTk(self, room, character, fileName):
-      with open(fileName, 'wb') as output:
-           pickle.dump(room, output, pickle.HIGHEST_PROTOCOL)
-           pickle.dump(character, output, pickle.HIGHEST_PROTOCOL)
-
    def doSave(self, room, character):
-      if (iowGetViewer() != None):
-         response = "y"
-      else:
-         iowPrint ("Are you sure you want to save the current game? [y/n]")
-         response = iowInput(">>: ")
-      if (response == "y"):
-         with open(gSavedSettingFileName, 'wb') as output:
-           pickle.dump(room, output, pickle.HIGHEST_PROTOCOL)
-         with open(gSavedPlayerFileName, 'wb') as output:
-           pickle.dump(character, output, pickle.HIGHEST_PROTOCOL)
-         iowPrint ("Game successfully saved!")
-      elif (response == "n"):
-        iowPrint ("save is cancelled.")
-      else:
-        iowPrint ("Invalid response, try again")
-        return self.doSave(room, character)
-
-   def doRestoreTk(self, room, character, fileName):
-      fh = open(fileName, 'rb')
-      savedRoom = pickle.load(fh)
-      savedCharacter = pickle.load(fh)
-      fh.close()
-      return [savedRoom, savedCharacter]
+      with open(gSavedSettingFileName, 'wb') as output:
+        pickle.dump(room, output, pickle.HIGHEST_PROTOCOL)
+      with open(gSavedPlayerFileName, 'wb') as output:
+        pickle.dump(character, output, pickle.HIGHEST_PROTOCOL)
+      iowPrint ("Game successfully saved!")
 
    def doRestore(self, room, character):
-      self.restoreRequested = "False"
-      if (iowGetViewer() != None):
-         response = "y"
+      if (os.path.exists(gSavedSettingFileName) and
+          os.path.exists(gSavedPlayerFileName)):
+         gfh = open(gSavedSettingFileName, 'rb')
+         pfh = open(gSavedPlayerFileName, 'rb')
+         room = pickle.load(gfh)
+         character = pickle.load(pfh)
+         gfh.close()
+         pfh.close()
+         iowPrint ("You find your being transported through time and space! Game Restored.\n")
+         room.displayRoom()
       else:
-         iowPrint ("Are you sure you want to restore to the last saved game? [y/n]")
-         response = iowInput(">>: ")
-      if (response == "y"):
-        if (os.path.exists(gSavedSettingFileName) and
-            os.path.exists(gSavedPlayerFileName)):
-           gfh = open(gSavedSettingFileName, 'rb')
-           pfh = open(gSavedPlayerFileName, 'rb')
-           room = pickle.load(gfh)
-           character = pickle.load(pfh)
-           gfh.close()
-           pfh.close()
-           iowPrint ("You find your being transported through time and space! Game Restored.\n")
-           room.displayRoom()
-        else:
-           iowPrint ("Sorry, there isn't a saved game to restore.")
-        return [room, character]
-      elif (response == "n"):
-        iowPrint ("restore is cancelled.")
-        return [room, character]
-      else:
-        iowPrint ("Invalid response, try again")
-        return self.doRestore(room, character)
-
-   def doQuit(self):
-      if (iowGetViewer() != None):
-         response = "y"
-      else:
-         iowPrint ("Are you sure you want to quit this game? [y/n]")
-         response = iowInput(">>: ")
-      if (response == "y"):
-         iowPrint ("You are vapourized into the next plane of existence... So long!")
-         exit(0)
-      elif (response == "n"):
-        iowPrint ("Then onwards you go!")
-      else:
-         return self.doQuit() 
- 
+         iowPrint ("Sorry, there isn't a saved game to restore.")
+      return [room, character]
 
    def doAdminAction(self, room, character):
       if self.action == "look":
@@ -186,14 +125,8 @@ class PlayerAction:
          itemDesc = self.action[4:]
          room.storeKeeper.sellItem(itemDesc,character,room)
 
-      elif self.action == "quit":
-         self.doQuit()
-
       elif self.action == "save":
-         self.doSave(room, character) 
-
-      elif self.action == "restore":
-         self.restoreRequested = "True"
+         self.doSave(room, character)
 
       elif self.action[:5] == "drop ":
          dropItem = self.action[5:]

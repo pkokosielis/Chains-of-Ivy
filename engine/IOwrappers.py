@@ -2,11 +2,8 @@ import textwrap
 
 viewer = None
 
-# A viewer is any object exposing write(msg). Frontends (tuimain.py, ...)
-# supply their own adapter around whatever widget they use.
-
-def iowGetViewer():
-   return viewer
+# A viewer is any object exposing write(msg). The Textual frontend
+# (tuimain.py) supplies its own adapter around its RichLog widget.
 
 def iowSetViewer(vObject):
    global viewer
@@ -30,6 +27,3 @@ def iowWrapPrint(msg):
 def iowDebugPrint(debug, msg):
    if (debug):
       iowPrint(msg)
-
-def iowInput(cmd):
-   return input(cmd)
