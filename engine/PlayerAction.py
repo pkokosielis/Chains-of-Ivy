@@ -95,12 +95,10 @@ class PlayerAction:
    def doRestore(self, room, character):
       if (os.path.exists(gSavedSettingFileName) and
           os.path.exists(gSavedPlayerFileName)):
-         gfh = open(gSavedSettingFileName, 'rb')
-         pfh = open(gSavedPlayerFileName, 'rb')
-         room = pickle.load(gfh)
-         character = pickle.load(pfh)
-         gfh.close()
-         pfh.close()
+         with open(gSavedSettingFileName, 'rb') as gfh:
+            room = pickle.load(gfh)
+         with open(gSavedPlayerFileName, 'rb') as pfh:
+            character = pickle.load(pfh)
          iowPrint ("You find your being transported through time and space! Game Restored.\n")
          room.displayRoom()
       else:
@@ -158,7 +156,10 @@ class PlayerAction:
 
       elif self.action[:4] == "buy ":
          itemDesc = self.action[4:]
-         room.storeKeeper.sellItem(itemDesc,character,room)
+         if room.storeKeeper:
+            room.storeKeeper.sellItem(itemDesc,character,room)
+         else:
+            iowPrint ("There is no storekeeper here to buy from.")
 
       elif self.action == "save":
          self.doSave(room, character)
@@ -181,7 +182,7 @@ class PlayerAction:
 
    def doAttackAction(self, room, character):
       if self.action == "attack":
-         targetList = room.getMonsters()
+         targetList = list(room.getMonsters())
          if not targetList:
             iowPrint ("There is nothing to attack!")
             return

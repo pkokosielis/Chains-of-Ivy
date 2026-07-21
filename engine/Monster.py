@@ -10,9 +10,9 @@ class Monster:
       self.attackType = monsterParms[3]
       self.expGiven = int(monsterParms[4])
       myItems = []
-      if (monsterParms[5] != 'None'): 
-         myItems = monsterParms[5] 
-      self.itemsToDrop = myItems 
+      if (monsterParms[5] not in (None, 'None')):
+         myItems = monsterParms[5]
+      self.itemsToDrop = myItems
       self.gold = int(monsterParms[6])
       self.status = "Alive"
       self.imageFile = imgFile

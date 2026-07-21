@@ -39,7 +39,7 @@ class NPC:
 
    def sayQuote(self, character, room):
       if (self.getQuestFulfilledStatus() == "Pending"):
-         for item in character.inventory:
+         for item in list(character.inventory):
             if item.npcRequestor == self:
                character.removeItem(item)
          iowWrapPrint (self.Thanks)
@@ -74,7 +74,7 @@ class NPC:
 
    def giveItems(self,room):
       if self.itemsToGive:
-         for item in self.itemsToGive:
+         for item in list(self.itemsToGive):
             self.itemsToGive.remove(item)
             iowWrapPrint (self.getName() + " presents to you a " + item.getName() + ".")
             room.addItemToRoom(item)

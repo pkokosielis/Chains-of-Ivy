@@ -2,6 +2,7 @@ from engine.Character import Character
 from engine.IOwrappers import iowPrint, iowSetViewer
 from engine.Item import Item
 from engine.Monster import Monster
+from engine.NPC import NPC
 from engine.Room import Room
 
 
@@ -111,3 +112,40 @@ def test_monster_dies_when_hp_drops_to_zero_or_below():
    monster.subtractFromHP(10)
 
    assert monster.getStatus() == "Dead"
+
+
+def test_npc_give_items_gives_every_reward_item(fake_viewer):
+   """Regression test: giveItems used to iterate self.itemsToGive while
+   removing from it, silently dropping every other reward item."""
+   iowSetViewer(fake_viewer)
+   npc = NPC("Rewarder", 0, 0)
+   items = [Item("A", "Trinket", 0), Item("B", "Trinket", 0), Item("C", "Trinket", 0)]
+   npc.addItems(items)
+   room = make_room()
+
+   npc.giveItems(room)
+
+   assert sorted(item.getName() for item in room.items) == ["A", "B", "C"]
+   assert npc.itemsToGive == []
+
+
+def test_npc_say_quote_removes_every_matching_quest_item(fake_viewer):
+   """Regression test: sayQuote used to iterate character.inventory while
+   removing matching items from it, silently leaving some behind whenever
+   a quest required 2+ items from the same NPC."""
+   iowSetViewer(fake_viewer)
+   npc = NPC("Quester", 10, 10)
+   npc.setThanksMessage("Thanks!")
+   items = [Item("A", "Trinket", 0), Item("B", "Trinket", 0), Item("C", "Trinket", 0)]
+   for item in items:
+      item.setQuestForNPC(npc)
+   npc.setQuestPending()
+   character = Character("Tester")
+   for item in items:
+      character.addToInventory(item)
+   room = make_room()
+
+   npc.sayQuote(character, room)
+
+   assert character.inventory == []
+   assert npc.getQuestFulfilledStatus() == "True"

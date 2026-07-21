@@ -37,7 +37,7 @@ class Room:
 
    def generateMonsterInRoom(self):
       chance = randint(0,100)
-      if (chance <= int(self.encounter)):
+      if (self.generatedMonsterList and chance <= int(self.encounter)):
          monsterType = choice(self.generatedMonsterList)
          monster = Monster(monsterType)
          self.addMonsterToRoom(monster)
