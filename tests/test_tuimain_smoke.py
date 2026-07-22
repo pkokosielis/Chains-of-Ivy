@@ -488,9 +488,6 @@ def test_tuimain_load_command_picks_and_restores_named_save(tmp_path, monkeypatc
 
 
 def test_tuimain_start_screen_shows_banner_and_new_game_starts_playable():
-   """The banner shows the rendered game_banner.png as half-block art when
-   Pillow is available, or falls back to plain "Chains of Ivy" text
-   otherwise - either way it must be non-empty and New Game must work."""
    async def _check_start_screen():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
@@ -504,22 +501,9 @@ def test_tuimain_start_screen_shows_banner_and_new_game_starts_playable():
 
    bannerText, hasPlayer, hasRoom = asyncio.run(asyncio.wait_for(_check_start_screen(), TIMEOUT))
 
-   assert bannerText.strip()
-   assert "Chains of Ivy" in bannerText or "▀" in bannerText
+   assert "Chains of Ivy" in bannerText
    assert hasPlayer
    assert hasRoom
-
-
-def test_tuimain_render_banner_image_produces_rendered_art_or_none():
-   """renderBannerImage must either return usable Rich Text art sized to
-   the requested column count, or None (so callers can fall back to
-   plain text) - it must never raise."""
-   from tuimain import renderBannerImage, BANNER_IMAGE_PATH
-
-   art = renderBannerImage(BANNER_IMAGE_PATH, 20)
-
-   assert art is None or art.plain.count("\n") + 1 <= 20
-   assert renderBannerImage("does/not/exist.png", 20) is None
 
 
 def test_tuimain_start_screen_restore_saved_game_loads_named_save(tmp_path, monkeypatch):

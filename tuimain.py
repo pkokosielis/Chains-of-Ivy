@@ -13,9 +13,6 @@ from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Header, Footer, RichLog, Input, Label, Button, Static
 
-from rich.style import Style
-from rich.text import Text
-
 from engine.IOwrappers import *
 from engine.PlayerAction import *
 from createdMonsters import *
@@ -334,50 +331,12 @@ class LoadPickerScreen(ModalScreen[str]):
       self.dismiss(None)
 
 
-BANNER_IMAGE_PATH = ".images/game_banner.png"
-# Sized to comfortably fit the launch dialog within an 80x24 terminal (the
-# smallest size this app is tested against) without needing to scroll.
-BANNER_IMAGE_COLUMNS = 36
-
-
-def renderBannerImage(path, columns):
-   """Renders a PNG as half-block Unicode art for terminal display, since
-   Textual has no built-in raster image support and this technique needs
-   no terminal graphics protocol (Sixel/Kitty/etc) to work. Returns a
-   Rich Text object, or None if the image can't be loaded (e.g. Pillow
-   isn't installed, or the file is missing) so callers can fall back to
-   plain text."""
-   try:
-      from PIL import Image as PILImage
-   except ImportError:
-      return None
-
-   try:
-      with PILImage.open(path) as sourceImage:
-         width, height = sourceImage.size
-         rows = max(1, round(columns * height / width / 2))
-         resized = sourceImage.convert("RGBA").resize((columns, rows * 2))
-         background = PILImage.new("RGBA", resized.size, (0, 0, 0, 255))
-         pixels = PILImage.alpha_composite(background, resized).convert("RGB").load()
-   except (OSError, ValueError):
-      return None
-
-   art = Text()
-   for row in range(rows):
-      for col in range(columns):
-         topColor = pixels[col, row * 2]
-         bottomColor = pixels[col, row * 2 + 1]
-         art.append(
-            "▀",
-            style=Style(color="rgb(%d,%d,%d)" % topColor, bgcolor="rgb(%d,%d,%d)" % bottomColor),
-         )
-      if row < rows - 1:
-         art.append("\n")
-   return art
-
-
 class StartScreen(ModalScreen[str]):
-   """Launch dialog: choose New Game or Restore Saved Game."""
+   """Launch dialog: choose New Game or Restore Saved Game.
+
+   #start-banner is a text placeholder standing in for a banner image
+   to be added later.
+   """
 
    BINDINGS = [("escape", "start_new", "New Game")]
 
@@ -390,7 +349,6 @@ class StartScreen(ModalScreen[str]):
       padding: 2 4;
       width: 60;
       height: auto;
-      max-height: 100%;
       border: thick $accent;
       background: $surface;
    }
@@ -398,7 +356,7 @@ class StartScreen(ModalScreen[str]):
    #start-banner {
       text-style: bold;
       content-align: center middle;
-      height: auto;
+      height: 5;
       border: round $accent;
       margin: 0 0 2 0;
    }
@@ -410,9 +368,8 @@ class StartScreen(ModalScreen[str]):
    """
 
    def compose(self) -> ComposeResult:
-      bannerArt = renderBannerImage(BANNER_IMAGE_PATH, BANNER_IMAGE_COLUMNS)
-      with VerticalScroll(id="start-dialog"):
-         yield Static(bannerArt if bannerArt is not None else "Chains of Ivy", id="start-banner")
+      with Vertical(id="start-dialog"):
+         yield Static("Chains of Ivy", id="start-banner")
          yield Button("New Game", id="start-new", variant="primary")
          yield Button("Restore Saved Game", id="start-restore")
 
