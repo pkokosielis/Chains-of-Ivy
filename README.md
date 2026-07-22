@@ -57,14 +57,17 @@ to `game.dat`/`player.dat` in the working directory.
 - Python 3.8+
 - [Textual](https://github.com/Textualize/textual) 4.x
 - pytest, to run the test suite
+- [Pillow](https://python-pillow.org/), optional — renders the launch screen's
+  `.images/game_banner.png` as terminal art. Without it the launch screen just
+  falls back to a plain text banner; nothing else is affected.
 
 Dependencies (Fedora):
 
-    sudo dnf install python3-textual python3-pytest
+    sudo dnf install python3-textual python3-pytest python3-pillow
 
 Dependencies (other platforms, via pip):
 
-    pip install textual pytest
+    pip install textual pytest pillow
 
 Test:
 
