@@ -1,5 +1,7 @@
 # Chains of Ivy
 
+![Chains of Ivy banner](.images/game_banner.png)
+
 A text-adventure RPG: explore rooms, fight monsters, talk to NPCs, shop at
 stores, and manage an inventory and stats.
 
