@@ -644,7 +644,9 @@ class ChainsOfIvyPygameApp:
          return
 
       rowHeight, rowGap = 32, 8
-      useWidth, dropWidth, buttonGap = 70, 60, 8
+      # useWidth needs to fit the longest label that button shows -
+      # "Equipped", not just "Use".
+      useWidth, dropWidth, buttonGap = 92, 60, 8
       x = self.inventoryPaneRect.x + 10
       nameWidth = self.inventoryPaneRect.width - 20 - useWidth - buttonGap - dropWidth - buttonGap
       y = self.inventoryPaneRect.y + 40
@@ -679,8 +681,11 @@ class ChainsOfIvyPygameApp:
          + "   Gold " + str(player.gold) + "   AC " + str(player.getArmorClass())
          + "   Weapon: " + weaponName
       )
-      textSurf = getFont(16, bold=True).render(statsText, True, COLOR_TEXT)
-      self.screen.blit(textSurf, (20, 20))
+      # Wraps (rather than a fixed single-line blit) since this can run
+      # longer than the space left before the Exit button - e.g. a long
+      # weapon name - and the whole top bar (y 0-60) is reserved for it.
+      statsRect = pygame.Rect(20, 4, self.exitButton.rect.x - 30, 52)
+      drawWrappedText(self.screen, statsText, statsRect, getFont(15, bold=True), COLOR_TEXT, align="left")
 
    def drawRoomImagePane(self):
       rect = self.roomImagePaneRect

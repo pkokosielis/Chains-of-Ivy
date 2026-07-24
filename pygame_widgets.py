@@ -109,8 +109,15 @@ class Button:
 
       pygame.draw.rect(surface, bgColor, self.rect, border_radius=4)
       pygame.draw.rect(surface, COLOR_ACCENT, self.rect, width=1, border_radius=4)
+
       textSurf = getFont(18).render(self.label, True, textColor)
+      # Clip so an unusually long label (a long save name, "Equipped",
+      # etc.) can never visually bleed into whatever's drawn next to
+      # this button, even though it isn't wrapped/shrunk to fit.
+      previousClip = surface.get_clip()
+      surface.set_clip(self.rect)
       surface.blit(textSurf, textSurf.get_rect(center=self.rect.center))
+      surface.set_clip(previousClip)
 
 
 class TextInput:
