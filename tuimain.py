@@ -332,7 +332,10 @@ class LoadPickerScreen(ModalScreen[str]):
 
 
 class StartScreen(ModalScreen[str]):
-   """Launch dialog: choose New Game or Restore Saved Game.
+   """Launch/game-over dialog: choose New Game, Restore Saved Game, or Exit.
+
+   Reused both at app startup and whenever the player dies, with the
+   banner text swapped to fit the occasion.
 
    #start-banner is a text placeholder standing in for a banner image
    to be added later.
@@ -367,11 +370,16 @@ class StartScreen(ModalScreen[str]):
    }
    """
 
+   def __init__(self, banner: str = "Chains of Ivy") -> None:
+      super().__init__()
+      self.banner = banner
+
    def compose(self) -> ComposeResult:
       with Vertical(id="start-dialog"):
-         yield Static("Chains of Ivy", id="start-banner")
+         yield Static(self.banner, id="start-banner")
          yield Button("New Game", id="start-new", variant="primary")
          yield Button("Restore Saved Game", id="start-restore")
+         yield Button("Exit", id="start-exit", variant="error")
 
    def on_button_pressed(self, event: Button.Pressed) -> None:
       self.dismiss(event.button.id)
@@ -531,6 +539,8 @@ class ChainsOfIvyApp(App):
       if choice == "start-restore":
          self.push_screen(
             LoadPickerScreen(self.nextAction.listNamedSaves()), self.handleStartRestorePick)
+      elif choice == "start-exit":
+         self.exit()
       else:
          self.startNewGame()
          await self.finishStartup()
@@ -555,6 +565,33 @@ class ChainsOfIvyApp(App):
       self.player = initialSetting[1]
       self.currentRoom.displayRoom()
 
+   def showGameOver(self) -> None:
+      self.push_screen(
+         StartScreen("You have perished in battle!\nGAME OVER"), self.handleGameOverChoice)
+
+   async def handleGameOverChoice(self, choice: str) -> None:
+      if choice == "start-restore":
+         self.push_screen(
+            LoadPickerScreen(self.nextAction.listNamedSaves()), self.handleGameOverRestorePick)
+      elif choice == "start-exit":
+         iowPrint("You are vapourized into the next plane of existence... So long!")
+         self.exit()
+      else:
+         iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
+         self.startNewGame()
+         await self.finishStartup()
+
+   async def handleGameOverRestorePick(self, name) -> None:
+      if not name:
+         self.showGameOver()
+         return
+      restored = self.tryRestore(self.nextAction.doNamedRestore, self.currentRoom, self.player, name)
+      if restored is None:
+         self.showGameOver()
+         return
+      self.currentRoom, self.player = restored
+      await self.finishStartup()
+
    async def on_input_submitted(self, event: Input.Submitted) -> None:
       if event.input.id != "command":
          return
@@ -576,16 +613,6 @@ class ChainsOfIvyApp(App):
 
       if action == "load":
          self.confirmLoad()
-         return
-
-      if self.player.isDead():
-         if action == "restart":
-            iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
-            self.startNewGame()
-            await self.refreshUI()
-         else:
-            iowPrint("You have already perished. Type 'restart' for a new game, "
-                     "'restore' to load a saved game, or 'quit' to exit.")
          return
 
       if action == "save":
@@ -620,7 +647,7 @@ class ChainsOfIvyApp(App):
 
       if self.player.isDead():
          iowPrint("\nYou have perished in battle! GAME OVER.")
-         iowPrint("Type 'restart' for a new game, 'restore' to load a saved game, or 'quit' to exit.")
+         self.showGameOver()
 
    def tryRestore(self, restoreFn, *args):
       """Runs a PlayerAction restore/load call, reporting failure (a
@@ -837,10 +864,6 @@ class ChainsOfIvyApp(App):
          return
 
       if buttonId.startswith("dir-"):
-         if self.player.isDead():
-            iowPrint("You have already perished. Type 'restart' for a new game, "
-                     "'restore' to load a saved game, or 'quit' to exit.")
-            return
          directionAction = next(
             (actionChar for bId, actionChar, _, _, _ in self.DIRECTION_INFO if bId == buttonId), None
          )
@@ -851,11 +874,6 @@ class ChainsOfIvyApp(App):
 
       item = self.inventoryButtonItems.get(buttonId)
       if item is None:
-         return
-
-      if self.player.isDead():
-         iowPrint("You have already perished. Type 'restart' for a new game, "
-                  "'restore' to load a saved game, or 'quit' to exit.")
          return
 
       if buttonId.startswith("inv-use-"):

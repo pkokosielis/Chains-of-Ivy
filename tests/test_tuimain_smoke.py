@@ -118,38 +118,97 @@ def test_tuimain_unknown_command_reports_error():
    assert "I don't understand your command" in output
 
 
-def test_tuimain_restart_after_death_returns_to_playable_state():
-   async def _play_then_kill_then_restart():
+def test_tuimain_death_shows_game_over_dialog_and_new_game_returns_to_playable_state():
+   async def _play_then_kill_then_new_game():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
          await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
 
-         # Kill the player directly, mirroring death mid-battle, then confirm
-         # every ordinary command is refused until "restart" is issued.
+         # Kill the player directly, mirroring death mid-battle, then take
+         # any action - the next performAction() call is what notices the
+         # death and pops up the game-over dialog.
          app.player.hp = 0
 
-         for command in ["look", "n", "attack", "inventory"]:
-            await pilot.click("#command")
-            await pilot.press(*tuple(command))
-            await pilot.press("enter")
-            await pilot.pause()
-
-         stuck_output = "\n".join(strip.text for strip in log.lines)
-         assert stuck_output.count("You have already perished") == 4
-         assert app.player.isDead() is True
-
          await pilot.click("#command")
-         await pilot.press(*tuple("restart"))
+         await pilot.press(*tuple("look"))
          await pilot.press("enter")
          await pilot.pause()
 
-         return app, "\n".join(strip.text for strip in log.lines)
+         assert isinstance(app.screen, StartScreen)
+         bannerText = str(app.screen.query_one("#start-banner").renderable)
+         assert "GAME OVER" in bannerText
+         assert app.player.isDead() is True
 
-   app, output = asyncio.run(asyncio.wait_for(_play_then_kill_then_restart(), TIMEOUT))
+         await pilot.click("#start-new")
+         await pilot.pause()
+
+         stillOnStartScreen = isinstance(app.screen, StartScreen)
+         return app, stillOnStartScreen, "\n".join(strip.text for strip in log.lines)
+
+   app, stillOnStartScreen, output = asyncio.run(
+      asyncio.wait_for(_play_then_kill_then_new_game(), TIMEOUT))
 
    assert app.player.isDead() is False
+   assert not stillOnStartScreen
    assert "Chorley Park Study" in output
+
+
+def test_tuimain_death_dialog_exit_quits_app():
+   async def _play_then_kill_then_exit():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+
+         app.player.hp = 0
+         await pilot.click("#command")
+         await pilot.press(*tuple("look"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, StartScreen)
+
+         await pilot.click("#start-exit")
+         await pilot.pause()
+
+         return app.is_running
+
+   isRunning = asyncio.run(asyncio.wait_for(_play_then_kill_then_exit(), TIMEOUT))
+
+   assert not isRunning
+
+
+def test_tuimain_death_dialog_restore_loads_named_save(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+
+   async def _save_then_die_then_restore():
+      app = ChainsOfIvyApp()
+      async with app.run_test() as pilot:
+         await _startNewGame(pilot)
+         app.nextAction.doNamedSave(app.currentRoom, app.player, "Before Death")
+
+         app.player.hp = 0
+         await pilot.click("#command")
+         await pilot.press(*tuple("look"))
+         await pilot.press("enter")
+         await pilot.pause()
+
+         assert isinstance(app.screen, StartScreen)
+
+         await pilot.click("#start-restore")
+         await pilot.pause()
+
+         assert isinstance(app.screen, LoadPickerScreen)
+         await pilot.click("#load-pick-0")
+         await pilot.pause()
+
+         stillOnStartScreen = isinstance(app.screen, StartScreen)
+         return app, stillOnStartScreen
+
+   app, stillOnStartScreen = asyncio.run(asyncio.wait_for(_save_then_die_then_restore(), TIMEOUT))
+
+   assert app.player.isDead() is False
+   assert not stillOnStartScreen
 
 
 def test_tuimain_quit_shows_exit_dialog_and_cancel_resumes_play():
@@ -1140,20 +1199,25 @@ def test_tuimain_direction_button_click_moves_player():
    assert "Chorley Park Library Hall" in output
 
 
-def test_tuimain_direction_button_disabled_after_dead():
+def test_tuimain_direction_button_triggers_game_over_dialog_when_dead():
    async def _kill_then_click():
       app = ChainsOfIvyApp()
       async with app.run_test() as pilot:
          await _startNewGame(pilot)
          log = app.query_one("#log", RichLog)
-         app.player.hp = 0
+         # A successful move heals 1 HP (Character.incrementHitPoints), so
+         # go well below zero to stay dead after that regen.
+         app.player.hp = -5
 
          await pilot.click("#dir-d")
          await pilot.pause()
 
-         return app, "\n".join(strip.text for strip in log.lines)
+         onStartScreen = isinstance(app.screen, StartScreen)
+         bannerText = str(app.screen.query_one("#start-banner").renderable) if onStartScreen else ""
+         return onStartScreen, bannerText, "\n".join(strip.text for strip in log.lines)
 
-   app, output = asyncio.run(asyncio.wait_for(_kill_then_click(), TIMEOUT))
+   onStartScreen, bannerText, output = asyncio.run(asyncio.wait_for(_kill_then_click(), TIMEOUT))
 
-   assert app.currentRoom.getTitle() == "Chorley Park Study"
-   assert "You have already perished" in output
+   assert onStartScreen
+   assert "GAME OVER" in bannerText
+   assert "You have perished in battle" in output
