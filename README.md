@@ -12,21 +12,27 @@ Author: Peter Kokosielis
 Two frontends share the same `engine/` package and save files, so a game
 saved in one can be restored in the other.
 
-**Textual TUI** (`tuimain.py`) — a scrollable output log plus a command
-input, with modal dialogs to confirm destructive actions (quit, save,
-restore, drop, buy, quest turn-in). Runs in the terminal; character-cell
-only, so it can't display real images.
-
-    python3 tuimain.py
-
-**Pygame frontend** (`pygame_main.py`) — a desktop window with the same
-command input, direction buttons, and inventory/dialog flows as the TUI,
-plus real image rendering (the launch banner and per-room art). Its
-widgets (buttons, text input, scrollable log, modal dialogs) are a small
-hand-rolled toolkit in `pygame_widgets.py`, since no GUI toolkit is
-packaged for pygame on Fedora.
+**Pygame frontend** (`pygame_main.py`) — the primary frontend. A desktop
+window with a command input, direction buttons, and inventory/dialog
+flows, plus real image rendering (the launch banner and per-room art) -
+the reason this frontend exists at all is that the TUI can't display
+images well (see below). Its widgets (buttons, text input, scrollable
+log, modal dialogs) are a small hand-rolled toolkit in
+`pygame_widgets.py`, since no GUI toolkit is packaged for pygame on
+Fedora. New features and UX polish should target this frontend first.
 
     python3 pygame_main.py
+
+**Textual TUI** (`tuimain.py`) — a lighter-weight terminal alternative
+with the same command set and dialog flows: a scrollable output log plus
+a command input, with modal dialogs to confirm destructive actions (quit,
+save, restore, drop, buy, quest turn-in). Useful when you don't need the
+art, or don't have a display (e.g. over SSH). Character-cell only, so it
+can't display real images - terminal graphics protocols (Sixel/Kitty)
+proved unreliable, and character-cell art is capped at low, blocky
+resolution no matter how it's tuned.
+
+    python3 tuimain.py
 
 ## Game engine
 
