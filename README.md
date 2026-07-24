@@ -7,24 +7,38 @@ stores, and manage an inventory and stats.
 
 Author: Peter Kokosielis
 
-## Frontend
+## Frontends
 
-The **Textual TUI** (`tuimain.py`) is the only frontend: a scrollable output
-log plus a command input, with modal dialogs to confirm destructive actions
-(quit, save, restore, drop, buy, quest turn-in).
+Two frontends share the same `engine/` package and save files, so a game
+saved in one can be restored in the other.
 
-Run it:
+**Textual TUI** (`tuimain.py`) — a scrollable output log plus a command
+input, with modal dialogs to confirm destructive actions (quit, save,
+restore, drop, buy, quest turn-in). Runs in the terminal; character-cell
+only, so it can't display real images.
 
     python3 tuimain.py
+
+**Pygame frontend** (`pygame_main.py`) — a desktop window with the same
+command input, direction buttons, and inventory/dialog flows as the TUI,
+plus real image rendering (the launch banner and per-room art). Its
+widgets (buttons, text input, scrollable log, modal dialogs) are a small
+hand-rolled toolkit in `pygame_widgets.py`, since no GUI toolkit is
+packaged for pygame on Fedora.
+
+    python3 pygame_main.py
 
 ## Game engine
 
 The `engine/` package holds all game logic and is frontend-agnostic — it
-never touches the terminal directly. Instead it writes through a `viewer`
-object registered via `engine/IOwrappers.py`'s `iowSetViewer()`, which
-`tuimain.py`'s `RichLogViewer` adapts to write into a Textual `RichLog`
-widget. This is also why engine code must never block on `input()`
-directly — doing so would hang the Textual event loop.
+never touches the terminal or a window directly. Instead it writes through
+a `viewer` object registered via `engine/IOwrappers.py`'s `iowSetViewer()`,
+which each frontend adapts to its own output: `tuimain.py`'s
+`RichLogViewer` writes into a Textual `RichLog` widget, and
+`pygame_main.py` hands the engine its `ScrollLog` widget directly (it
+already exposes `write(msg)`). This is also why engine code must never
+block on `input()` directly — doing so would hang either frontend's event
+loop.
 
 Key pieces:
 
@@ -57,17 +71,23 @@ to `game.dat`/`player.dat` in the working directory.
 ## Requirements
 
 - Python 3.8+
-- [Textual](https://github.com/Textualize/textual) 4.x
+- [Textual](https://github.com/Textualize/textual) 4.x, for the TUI
+- [Pygame](https://www.pygame.org/) 2.x, for the Pygame frontend
 - pytest, to run the test suite
+
+You only need Textual or Pygame installed if you plan to run that
+particular frontend; the test suite exercises both, so both are needed to
+run `python3 -m pytest` cleanly.
 
 Dependencies (Fedora):
 
-    sudo dnf install python3-textual python3-pytest
+    sudo dnf install python3-textual python3-pygame python3-pytest
 
 Dependencies (other platforms, via pip):
 
-    pip install textual pytest
+    pip install textual pygame pytest
 
-Test:
+Test (runs both frontends' suites headlessly - the Pygame tests set
+`SDL_VIDEODRIVER=dummy` themselves, so no display is required):
 
     python3 -m pytest
