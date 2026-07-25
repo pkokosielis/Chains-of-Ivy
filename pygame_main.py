@@ -41,14 +41,14 @@ from createdRooms import *
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 820
 
-BANNER_IMAGE_PATH = "images/game_banner.png"
+BANNER_IMAGE_PATH = ".images/game_banner.png"
 # Maps a Room's numeric ID to the art shown for it on the main screen.
 # Not every room has art yet; rooms missing from this dict simply show no
 # image. Lives here, not in the engine, so engine/Room.py stays
 # frontend-agnostic.
 ROOM_IMAGES = {
-   1: "images/room1.png",
-   2: "images/room2.png",
+   1: ".images/room1.png",
+   2: ".images/room2.png",
 }
 
 _imageCache = {}
@@ -240,7 +240,7 @@ class StartScreen(Modal):
 
    Reused both at app startup and whenever the player dies, with the
    banner text swapped to fit the occasion. The launch screen's default
-   banner renders images/game_banner.png as a real image when it can be
+   banner renders .images/game_banner.png as a real image when it can be
    loaded, falling back to plain text otherwise; the game-over banner is
    always plain text - there's no "you died" art."""
 
