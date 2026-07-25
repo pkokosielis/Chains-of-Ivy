@@ -70,6 +70,9 @@ iowDebugPrint (debugRooms, RoomArray)
 (getRoomWithID(7)).addNPCtoRoom(ttcAutomaton)
 (getRoomWithID(7)).blockDirection("Down")
 (getRoomWithID(9)).addNPCtoRoom(dorian)
+(getRoomWithID(33)).addNPCtoRoom(ambrose)
+(getRoomWithID(34)).addNPCtoRoom(wilhelmina)
+(getRoomWithID(36)).addNPCtoRoom(ezra)
 
 #Storekeepers
 (getRoomWithID(12)).addStoreKeeperToRoom(finius)
@@ -81,4 +84,7 @@ iowDebugPrint (debugRooms, RoomArray)
 #Monsters
 drunkenLudwig.addItems([dorianCoatOfArms])
 (getRoomWithID(10)).addMonsterToRoom(drunkenLudwig)
+
+corvinSlake.addItems([windingCrank,signalStaff])
+(getRoomWithID(37)).addMonsterToRoom(corvinSlake)
 

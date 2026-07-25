@@ -26,4 +26,6 @@ iowDebugPrint(debugMonster, StockMonsterList)
 
 # boss monsters
 drunkenLudwig = Monster(["drunken rebel Ludwig", 18, 7, "swings hot poker", 40, None, 25], None)
+
+corvinSlake = Monster(["parcel thief Corvin Slake", 26, 9, "lashes out with a baggage strap", 90, None, 120], None)
  

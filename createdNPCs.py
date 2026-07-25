@@ -94,4 +94,52 @@ mysticRing.setItemValue(135000)
 henriette = StoreKeeper("Henriette", "Patachou of Versailles")
 henriette.setWelcomeMessage("Welcome to Patachou's treasures of Versailles. Please have a look around.")
 henriette.setThanksMessage("An excellent choice, fit for a king!")
-henriette.addItem([JLWatch,VCWatch,mysticRing])  
+henriette.addItem([JLWatch,VCWatch,mysticRing])
+
+# The Summerhill chain. Corvin Slake robs the tower and the station, and
+# carries both the winding crank and the signal staff. Ambrose pays out in
+# the gauge glass, which is itself Ezra's quest item, so the three link up
+# the same way Dorian's TTC pass feeds the turnstile automaton.
+windingCrank = Item("winding crank", "crank", 1)
+signalStaff = Item("signal staff", "staff", 1)
+gaugeGlass = Item("gauge glass", "glass", 1)
+
+# Wilhelmina Roke, keeper of the North Toronto clock tower
+keeperBoots = Item("Keeper's Climbing Boots", "Boots", 6)
+keeperBoots.setItemValue(900)
+wilhelmina = NPC("Wilhelmina Roke the tower keeper", 1200, 150)
+wilhelmina.addQuoteBeforeQuest("I am Wilhelmina Roke. Ninety-one years my family has wound this clock, and it had never once stopped.")
+wilhelmina.addQuoteBeforeQuest("It has stopped now. A thief took the winding crank three days past, and I heard him go down the stair two at a time.")
+wilhelmina.addQuoteBeforeQuest("Without the crank the going train runs down, and half of Rosedale loses the quarter hours.")
+wilhelmina.addQuoteBeforeQuest("Bring me that crank and I will see you properly shod.")
+wilhelmina.setThanksMessage("Bless you! The crank, and the tower keeps time again. Take these boots - I have climbed this stair sixty years and I know what it does to a pair. They will serve you better than they serve me now.")
+wilhelmina.addQuoteAfterQuest("Listen to that. The quarter hours, right on the dial. That is your doing.")
+wilhelmina.addQuoteAfterQuest("Mind the louvres if the wind gets up. It has taken the hat off better men than you.")
+wilhelmina.addItems([keeperBoots])
+windingCrank.setQuestForNPC(wilhelmina)
+
+# Ezra Vance, engineer of the Rosehill pumping house
+pumpSpanner = Item("brass pump spanner", "Weapon", 14)
+pumpSpanner.setItemValue(1400)
+ezra = NPC("Ezra Vance the reservoir engineer", 2500, 500)
+ezra.addQuoteBeforeQuest("Ezra Vance. I keep the beam engine, and the beam engine keeps the water above the city.")
+ezra.addQuoteBeforeQuest("She has been running blind a fortnight. The gauge glass cracked and the replacement sits in the parcels office at the station.")
+ezra.addQuoteBeforeQuest("Quill will not send a boy up the hill with it. Too busy, he says, with that precious Montreal train of his.")
+ezra.addQuoteBeforeQuest("Bring me a gauge glass and you will not find me ungrateful.")
+ezra.setThanksMessage("Now that is a handsome piece of glass. She will hold pressure honestly again. Here, take the spanner - eleven pounds of brass and it has never yet rounded a nut. You will find it useful for more than nuts.")
+ezra.addQuoteAfterQuest("Steady as a heartbeat, listen to her. Forty strokes to the minute and not one of them wasted.")
+ezra.addQuoteAfterQuest("The Vale runs black below the far parapet. I would not go down there after dark.")
+ezra.addItems([pumpSpanner])
+gaugeGlass.setQuestForNPC(ezra)
+
+# Ambrose Quill, stationmaster of the North Toronto railway station
+ambrose = NPC("Ambrose Quill the stationmaster", 2000, 300)
+ambrose.addQuoteBeforeQuest("Ambrose Quill, stationmaster, and I am in a very great deal of trouble.")
+ambrose.addQuoteBeforeQuest("The boat train for Montreal has stood at the platform two days. I cannot dispatch her without the signal staff.")
+ambrose.addQuoteBeforeQuest("No staff, no train on the single line. That is the rule, and the rule is all that keeps them from meeting head-on in the dark.")
+ambrose.addQuoteBeforeQuest("The same wretch who robbed the tower took it. He is somewhere about the shed, I am certain of it.")
+ambrose.setThanksMessage("The staff! Oh, well done. She can move at last. Here - take this gauge glass from the parcels office. It came up on the mail for Vance at the reservoir and he has badgered me for it a fortnight. Carry it to him and spare me the letters.")
+ambrose.addQuoteAfterQuest("The Montreal train got away clean on Tuesday. First time in a month.")
+ambrose.addQuoteAfterQuest("If you are going up the hill to the reservoir, Vance will be glad of that glass.")
+ambrose.addItems([gaugeGlass])
+signalStaff.setQuestForNPC(ambrose)  

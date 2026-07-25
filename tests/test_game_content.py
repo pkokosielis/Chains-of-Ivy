@@ -77,12 +77,10 @@ def test_room_descriptions_do_not_promise_missing_exits():
    """Regression test: rooms 8 and 19 used to describe north/south exits
    (a subway platform's "northbound or southbound train", and boilerplate
    "Five Thieves" strip text) that didn't actually exist in the room
-   graph. Room 19 is exempted here since its corrected text legitimately
-   says "north" while explicitly describing that direction as a dead end."""
-   exemptRoomIds = {19}
+   graph. Room 19 was formerly exempted as a dead end at the top of the
+   strip. It now opens north onto Yonge at Marlborough, so no room is
+   exempt and every room is checked."""
    for room in RoomArray:
-      if room.getID() in exemptRoomIds:
-         continue
       desc = room.description.lower()
       exists = {
          "north": room.north is not None,
