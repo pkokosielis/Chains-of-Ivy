@@ -804,21 +804,28 @@ class ChainsOfIvyPygameApp:
       if not self.player:
          return
       player = self.player
-      weaponName = player.weapon.getName() if player.weapon else "Bare Hands"
+      # Weapon is no longer repeated here - it's shown in the Inventory
+      # pane's Equip Slots block alongside helmet/suit/boots.
       statsText = (
-         player.getName() + "   Level " + str(player.level) + "   XP " + str(player.experience)
+         "Level " + str(player.level) + "   XP " + str(player.experience)
          + "   HP " + str(player.hp) + "/" + str(player.hp_max)
          + "   Might " + str(player.might) + "   Magic " + str(player.magic)
          + "   Gold " + str(player.gold) + "   AC " + str(player.getArmorClass())
-         + "   Weapon: " + weaponName
       )
-      # Wraps (rather than a fixed single-line blit) since this can run
-      # longer than the space left before the admin menu button - e.g. a
-      # long weapon name - and the whole top bar (y 0-60) is reserved for it.
       statsRect = pygame.Rect(20, 4, self.adminMenu.toggleButton.rect.x - 30, 52)
       if self.statsHighlightTimer > 0:
          pygame.draw.rect(self.screen, COLOR_ACCENT, statsRect.inflate(12, 8), width=2, border_radius=4)
-      drawWrappedText(self.screen, statsText, statsRect, getFont(14, bold=True), COLOR_TEXT, align="left")
+
+      # Name reads as a heading (serif, matching the Scene pane's room
+      # title) on its own line above the numbers, rather than folded into
+      # the same line as everything else.
+      nameFont = getFont(16, bold=True, serif=True)
+      nameSurf = nameFont.render(player.getName(), True, COLOR_TEXT)
+      self.screen.blit(nameSurf, (statsRect.x, statsRect.y))
+
+      statsLineRect = pygame.Rect(statsRect.x, statsRect.y + nameSurf.get_height() + 2,
+                                   statsRect.width, statsRect.height - nameSurf.get_height() - 2)
+      drawWrappedText(self.screen, statsText, statsLineRect, getFont(14, bold=True), COLOR_TEXT, align="left")
 
    def drawScenePane(self):
       """The room title, art (when this room has any), and description -
