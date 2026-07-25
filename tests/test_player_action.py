@@ -16,12 +16,17 @@ def test_get_action_type_classification(fake_viewer):
    for cmd, expected in [
       ("n", "Move"), ("s", "Move"), ("e", "Move"), ("w", "Move"),
       ("u", "Move"), ("d", "Move"),
-      ("look", "Admin"), ("take sword", "Admin"), ("drop sword", "Admin"),
+      ("take sword", "Admin"), ("drop sword", "Admin"),
       ("inventory", "Admin"), ("stats", "Admin"), ("use sword", "Admin"),
       ("buy sword", "Admin"), ("save", "Admin"), ("restore", "Admin"),
       ("quit", "Admin"), ("help", "Admin"), ("talk", "Admin"),
       ("attack", "Attack"),
       ("gibberish", "Bad"),
+      # "look" was dropped: the Pygame frontend's Scene/Here panes already
+      # show the current room persistently, so re-displaying it produced
+      # nothing a player couldn't already see. Asserted here (rather than
+      # just deleted) so it stays intentionally unrecognized.
+      ("look", "Bad"),
    ]:
       action.action = cmd
       assert action.getActionType() == expected, cmd

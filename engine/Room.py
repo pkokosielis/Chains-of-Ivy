@@ -82,9 +82,13 @@ class Room:
           iowPrint ("There is nothing to take.")
  
    def displayRoom(self):
+      # The description itself isn't printed here - it's shown elsewhere
+      # persistently for as long as you're in the room, so repeating it
+      # into the log on every move would just be noise. Title and who/what
+      # is here still print, since that's a record of arrival worth
+      # keeping once you've moved on to another room.
       iowPrint ("\n" + self.getTitle())
       iowPrint ("____________________________________")
-      iowWrapPrint (self.description)
       if self.npc:
          for npc in self.npc:
             iowPrint (npc.getName() + " is here.")

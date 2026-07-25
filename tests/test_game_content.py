@@ -102,7 +102,7 @@ def test_full_playthrough_smoke(fake_viewer):
    room, player = initSetting()
    action = PlayerAction()
 
-   for cmd in ("look", "take all", "inventory", "stats", "d", "help"):
+   for cmd in ("take all", "inventory", "stats", "d", "help"):
       room = action.doAction(room, player, cmd)
 
    assert player.isDead() is False

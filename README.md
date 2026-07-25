@@ -38,7 +38,7 @@ loop.
 Key pieces:
 
 - `PlayerAction` — parses a typed command into a move, admin, or attack
-  action and applies it. Commands: `n`/`s`/`e`/`w`/`u`/`d` (move), `look`,
+  action and applies it. Commands: `n`/`s`/`e`/`w`/`u`/`d` (move),
   `inventory`, `stats`, `take <item>`/`take all`, `drop <item>`,
   `use <item>`, `buy <item>`, `talk`, `attack`, `save`, `restore`, `quit`,
   `help`.

@@ -32,7 +32,7 @@ class PlayerAction:
           self.action == "u" or self.action == "d"):
          self.type = "Move"
 
-      elif (self.action == "look" or self.action[:5] == "take " or
+      elif (self.action[:5] == "take " or
             self.action[:5] == "drop " or self.action == "inventory" or
             self.action == "stats" or self.action == "talk" or
             self.action == "save" or self.action == "restore" or
@@ -70,7 +70,6 @@ class PlayerAction:
       iowPrint ("w - move West")
       iowPrint ("u - move Up")
       iowPrint ("d - move Down")
-      iowPrint ("look - Look at current room")
       iowPrint ("stats - Show character statistics")
       iowPrint ("inventory - Show character's inventory")
       iowPrint ("take [all | <item>] - take a specific item")
@@ -134,10 +133,7 @@ class PlayerAction:
                      if fileName.endswith(".dat"))
 
    def doAdminAction(self, room, character):
-      if self.action == "look":
-         room.displayRoom()
-
-      elif self.action[:5] == "take ":
+      if self.action[:5] == "take ":
          takeItem = self.action[5:]
          if (takeItem == "all"):
             room.takeAllItems(character)
