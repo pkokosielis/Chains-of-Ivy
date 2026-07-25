@@ -1,11 +1,11 @@
 #!/usr/bin/python
-"""Pygame frontend for Chains of Ivy.
+"""Pygame frontend for Chains of Ivy - the native frontend.
 
-A close mirror of tuimain.py's ChainsOfIvyApp, but drawing to a pygame
-window instead of a Textual terminal UI - built so real images (room art,
-banner) can be shown without fighting terminal graphics protocols or
-character-cell resolution limits. The engine (engine/*.py) is untouched
-and frontend-agnostic: everything routes through iowPrint/iowWrapPrint,
+A desktop window built with a small hand-rolled widget toolkit
+(pygame_widgets.py), so real images (room art, banner) can be shown
+without fighting terminal graphics protocols or character-cell
+resolution limits. The engine (engine/*.py) is untouched and
+frontend-agnostic: everything routes through iowPrint/iowWrapPrint,
 which just needs an object exposing write(msg) - here, a ScrollLog.
 """
 import sys
@@ -39,7 +39,7 @@ from createdNPCs import *
 from createdRooms import *
 
 WINDOW_WIDTH = 1100
-WINDOW_HEIGHT = 750
+WINDOW_HEIGHT = 820
 
 BANNER_IMAGE_PATH = "images/game_banner.png"
 # Maps a Room's numeric ID to the art shown for it on the main screen.
@@ -48,6 +48,7 @@ BANNER_IMAGE_PATH = "images/game_banner.png"
 # frontend-agnostic.
 ROOM_IMAGES = {
    1: "images/room1.png",
+   2: "images/room2.png",
 }
 
 _imageCache = {}
@@ -136,7 +137,7 @@ class ConfirmScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, self.question, self.questionRect, getFont(18), COLOR_TEXT)
+      drawWrappedText(surface, self.question, self.questionRect, getFont(15), COLOR_TEXT)
 
 
 class ExitScreen(Modal):
@@ -164,7 +165,7 @@ class ExitScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "What would you like to do?", self.titleRect, getFont(18), COLOR_TEXT)
+      drawWrappedText(surface, "What would you like to do?", self.titleRect, getFont(15), COLOR_TEXT)
 
 
 class SaveNameScreen(Modal):
@@ -201,9 +202,9 @@ class SaveNameScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Name this save:", self.titleRect, getFont(18), COLOR_TEXT, align="left")
+      drawWrappedText(surface, "Name this save:", self.titleRect, getFont(15), COLOR_TEXT, align="left")
       if self.showError:
-         drawWrappedText(surface, "Please enter a valid name.", self.errorRect, getFont(14),
+         drawWrappedText(surface, "Please enter a valid name.", self.errorRect, getFont(12),
                           COLOR_ERROR, align="left")
 
 
@@ -228,7 +229,7 @@ class PostSaveScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Game saved! Continue playing?", self.questionRect, getFont(18), COLOR_TEXT)
+      drawWrappedText(surface, "Game saved! Continue playing?", self.questionRect, getFont(15), COLOR_TEXT)
 
 
 DEFAULT_BANNER_TEXT = "Chains of Ivy"
@@ -279,7 +280,7 @@ class StartScreen(Modal):
       if self.bannerImage is not None:
          surface.blit(self.bannerImage, self.bannerImage.get_rect(center=self.bannerRect.center))
       else:
-         drawWrappedText(surface, self.banner, self.bannerRect, getFont(20, bold=True), COLOR_TEXT)
+         drawWrappedText(surface, self.banner, self.bannerRect, getFont(17, bold=True), COLOR_TEXT)
 
 
 class LoadPickerScreen(Modal):
@@ -316,9 +317,9 @@ class LoadPickerScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Load which saved game?", self.titleRect, getFont(18), COLOR_TEXT, align="left")
+      drawWrappedText(surface, "Load which saved game?", self.titleRect, getFont(15), COLOR_TEXT, align="left")
       if self.noSavesRect:
-         drawWrappedText(surface, "No saved games found.", self.noSavesRect, getFont(16),
+         drawWrappedText(surface, "No saved games found.", self.noSavesRect, getFont(14),
                           COLOR_TEXT_DIM, align="left")
 
 
@@ -337,17 +338,17 @@ class ChainsOfIvyPygameApp:
 
       self.modalStack = ModalStack()
 
-      self.roomImagePaneRect = pygame.Rect(20, 60, 650, 180)
-      self.log = ScrollLog((20, 250, 650, 330))
+      self.roomImagePaneRect = pygame.Rect(20, 60, 650, 440)
+      self.log = ScrollLog((20, 510, 650, 244))
       iowSetViewer(self.log)
 
-      self.commandInput = TextInput((20, 590, 650, 36), placeholder="What do you do?",
+      self.commandInput = TextInput((20, 764, 650, 36), placeholder="What do you do?",
                                      on_submit=self.handleCommand)
 
       self.directionButtons = {}
       self._buildDirectionButtons()
 
-      self.inventoryPaneRect = pygame.Rect(690, 60, 390, 360)
+      self.inventoryPaneRect = pygame.Rect(690, 60, 390, 580)
       self.inventoryButtons = []
 
       self.exitButton = Button((WINDOW_WIDTH - 110, 14, 90, 34), "Exit",
@@ -357,7 +358,7 @@ class ChainsOfIvyPygameApp:
       self.modalStack.push(StartScreen(), self.handleStartChoice)
 
    def _buildDirectionButtons(self):
-      self.directionPaneRect = pygame.Rect(690, 430, 390, 150)
+      self.directionPaneRect = pygame.Rect(690, 650, 390, 150)
       btnWidth, btnHeight, gap = 80, 32, 8
       startX = self.directionPaneRect.x + 10
       compassY = self.directionPaneRect.y + 34
@@ -685,7 +686,7 @@ class ChainsOfIvyPygameApp:
       # longer than the space left before the Exit button - e.g. a long
       # weapon name - and the whole top bar (y 0-60) is reserved for it.
       statsRect = pygame.Rect(20, 4, self.exitButton.rect.x - 30, 52)
-      drawWrappedText(self.screen, statsText, statsRect, getFont(15, bold=True), COLOR_TEXT, align="left")
+      drawWrappedText(self.screen, statsText, statsRect, getFont(13, bold=True), COLOR_TEXT, align="left")
 
    def drawRoomImagePane(self):
       rect = self.roomImagePaneRect
@@ -703,15 +704,15 @@ class ChainsOfIvyPygameApp:
       rect = self.inventoryPaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
       pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
-      titleSurf = getFont(16, bold=True).render("Inventory", True, COLOR_TEXT)
+      titleSurf = getFont(14, bold=True).render("Inventory", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
 
       if not self.inventoryButtons:
-         emptySurf = getFont(15).render("Nothing carried.", True, COLOR_TEXT_DIM)
+         emptySurf = getFont(13).render("Nothing carried.", True, COLOR_TEXT_DIM)
          self.screen.blit(emptySurf, (rect.x + 10, rect.y + 40))
          return
 
-      nameFont = getFont(15)
+      nameFont = getFont(13)
       for item, useButton, dropButton in self.inventoryButtons:
          nameSurf = nameFont.render(item.getName(), True, COLOR_TEXT)
          nameY = useButton.rect.y + (useButton.rect.height - nameSurf.get_height()) // 2
@@ -723,7 +724,7 @@ class ChainsOfIvyPygameApp:
       rect = self.directionPaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
       pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
-      titleSurf = getFont(16, bold=True).render("Move", True, COLOR_TEXT)
+      titleSurf = getFont(14, bold=True).render("Move", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
       for button in self.directionButtons.values():
          button.draw(self.screen)

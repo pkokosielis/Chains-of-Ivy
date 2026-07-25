@@ -2,8 +2,9 @@ import textwrap
 
 viewer = None
 
-# A viewer is any object exposing write(msg). The Textual frontend
-# (tuimain.py) supplies its own adapter around its RichLog widget.
+# A viewer is any object exposing write(msg). The Pygame frontend
+# (pygame_main.py) passes its ScrollLog widget directly, since it already
+# exposes write(msg).
 
 def iowSetViewer(vObject):
    global viewer

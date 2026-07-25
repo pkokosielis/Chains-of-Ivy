@@ -6,7 +6,7 @@ from createdNPCs import crow, dorian, finius, ttcAutomaton
 from createdRooms import RoomArray, getRoomWithID
 from engine.IOwrappers import iowSetViewer
 from engine.PlayerAction import PlayerAction
-from tuimain import initSetting
+from pygame_main import initSetting
 
 
 def test_starting_room_matches_shipped_content():
@@ -97,8 +97,8 @@ def test_room_descriptions_do_not_promise_missing_exits():
 
 
 def test_full_playthrough_smoke(fake_viewer):
-   """End-to-end regression covering the same command sequence used to
-   manually verify tuimain.py after the tkinter-to-Textual frontend swap."""
+   """End-to-end regression exercising a basic command sequence against
+   the shipped game content, independent of any particular frontend."""
    iowSetViewer(fake_viewer)
 
    room, player = initSetting()

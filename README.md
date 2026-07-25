@@ -7,43 +7,32 @@ stores, and manage an inventory and stats.
 
 Author: Peter Kokosielis
 
-## Frontends
+## Frontend
 
-Two frontends share the same `engine/` package and save files, so a game
-saved in one can be restored in the other.
-
-**Pygame frontend** (`pygame_main.py`) — the primary frontend. A desktop
+**Pygame** (`pygame_main.py`) is the native, sole frontend. A desktop
 window with a command input, direction buttons, and inventory/dialog
-flows, plus real image rendering (the launch banner and per-room art) -
-the reason this frontend exists at all is that the TUI can't display
-images well (see below). Its widgets (buttons, text input, scrollable
-log, modal dialogs) are a small hand-rolled toolkit in
-`pygame_widgets.py`, since no GUI toolkit is packaged for pygame on
-Fedora. New features and UX polish should target this frontend first.
+flows to confirm destructive actions (quit, save, restore, drop, buy,
+quest turn-in), plus real image rendering (the launch banner and
+per-room art). Its widgets (buttons, text input, scrollable log, modal
+dialogs) are a small hand-rolled toolkit in `pygame_widgets.py`, since no
+GUI toolkit is packaged for pygame on Fedora.
 
     python3 pygame_main.py
 
-**Textual TUI** (`tuimain.py`) — a lighter-weight terminal alternative
-with the same command set and dialog flows: a scrollable output log plus
-a command input, with modal dialogs to confirm destructive actions (quit,
-save, restore, drop, buy, quest turn-in). Useful when you don't need the
-art, or don't have a display (e.g. over SSH). Character-cell only, so it
-can't display real images - terminal graphics protocols (Sixel/Kitty)
-proved unreliable, and character-cell art is capped at low, blocky
-resolution no matter how it's tuned.
-
-    python3 tuimain.py
+A Textual terminal UI (`tuimain.py`) previously existed alongside this,
+but was removed: it couldn't display real images (terminal graphics
+protocols like Sixel/Kitty proved unreliable, and character-cell art is
+capped at low, blocky resolution no matter how it's tuned), which is
+what this game's art needs.
 
 ## Game engine
 
 The `engine/` package holds all game logic and is frontend-agnostic — it
-never touches the terminal or a window directly. Instead it writes through
-a `viewer` object registered via `engine/IOwrappers.py`'s `iowSetViewer()`,
-which each frontend adapts to its own output: `tuimain.py`'s
-`RichLogViewer` writes into a Textual `RichLog` widget, and
-`pygame_main.py` hands the engine its `ScrollLog` widget directly (it
-already exposes `write(msg)`). This is also why engine code must never
-block on `input()` directly — doing so would hang either frontend's event
+never touches the window directly. Instead it writes through a `viewer`
+object registered via `engine/IOwrappers.py`'s `iowSetViewer()`;
+`pygame_main.py` hands the engine its `ScrollLog` widget directly, since
+it already exposes `write(msg)`. This is also why engine code must never
+block on `input()` directly — doing so would hang the frontend's event
 loop.
 
 Key pieces:
@@ -77,23 +66,18 @@ to `game.dat`/`player.dat` in the working directory.
 ## Requirements
 
 - Python 3.8+
-- [Textual](https://github.com/Textualize/textual) 4.x, for the TUI
-- [Pygame](https://www.pygame.org/) 2.x, for the Pygame frontend
+- [Pygame](https://www.pygame.org/) 2.x
 - pytest, to run the test suite
-
-You only need Textual or Pygame installed if you plan to run that
-particular frontend; the test suite exercises both, so both are needed to
-run `python3 -m pytest` cleanly.
 
 Dependencies (Fedora):
 
-    sudo dnf install python3-textual python3-pygame python3-pytest
+    sudo dnf install python3-pygame python3-pytest
 
 Dependencies (other platforms, via pip):
 
-    pip install textual pygame pytest
+    pip install pygame pytest
 
-Test (runs both frontends' suites headlessly - the Pygame tests set
-`SDL_VIDEODRIVER=dummy` themselves, so no display is required):
+Test (runs headlessly - the Pygame tests set `SDL_VIDEODRIVER=dummy`
+themselves, so no display is required):
 
     python3 -m pytest

@@ -1,10 +1,10 @@
 """Small hand-rolled widget toolkit for the Pygame frontend.
 
 Pygame provides no GUI widgets - just a canvas and an event queue - so this
-module supplies the minimum needed to reproduce tuimain.py's UI: clickable
-buttons, a single-line text input, a scrollable text log, and a modal
-dialog stack that mirrors Textual's push_screen(...)/dismiss() pattern
-closely enough that tuimain.py's dialog flows port over almost verbatim.
+module supplies what pygame_main.py needs: clickable buttons, a
+single-line text input, a scrollable text log, and a modal dialog stack
+(push_modal(modal, on_dismiss) / modal.dismiss(result)) modeled on
+Textual's push_screen(...)/dismiss() pattern.
 """
 
 import pygame
@@ -73,8 +73,7 @@ def wrapText(text, font, maxWidth):
 
 class Button:
    """A clickable rectangle with a label. variant is "default", "primary",
-   or "error", matching the styling vocabulary tuimain.py already uses for
-   its Textual buttons."""
+   or "error"."""
 
    def __init__(self, rect, label, on_click=None, variant="default", enabled=True):
       self.rect = pygame.Rect(rect)
@@ -110,7 +109,7 @@ class Button:
       pygame.draw.rect(surface, bgColor, self.rect, border_radius=4)
       pygame.draw.rect(surface, COLOR_ACCENT, self.rect, width=1, border_radius=4)
 
-      textSurf = getFont(18).render(self.label, True, textColor)
+      textSurf = getFont(15).render(self.label, True, textColor)
       # Clip so an unusually long label (a long save name, "Equipped",
       # etc.) can never visually bleed into whatever's drawn next to
       # this button, even though it isn't wrapped/shrunk to fit.
@@ -122,8 +121,7 @@ class Button:
 
 class TextInput:
    """A single-line text box. Enter (or an explicit submit) calls
-   on_submit(value) and clears the field, mirroring Textual's
-   Input.Submitted behavior in tuimain.py."""
+   on_submit(value) and clears the field."""
 
    def __init__(self, rect, placeholder="", on_submit=None):
       self.rect = pygame.Rect(rect)
@@ -165,7 +163,7 @@ class TextInput:
       pygame.draw.rect(surface, COLOR_SURFACE, self.rect)
       pygame.draw.rect(surface, COLOR_ACCENT if self.focused else COLOR_TEXT_DIM, self.rect, width=1)
 
-      font = getFont(18)
+      font = getFont(15)
       showingPlaceholder = not self.value and not self.focused
       displayText = self.placeholder if showingPlaceholder else self.value
       textColor = COLOR_TEXT_DIM if showingPlaceholder else COLOR_TEXT
@@ -177,19 +175,25 @@ class TextInput:
          pygame.draw.line(surface, COLOR_TEXT, (cursorX, self.rect.y + 4), (cursorX, self.rect.bottom - 4))
 
 
+SCROLLBAR_WIDTH = 10
+SCROLLBAR_MARGIN = 4
+SCROLLBAR_MIN_THUMB = 24
+
+
 class ScrollLog:
-   """Scrollable text panel - the .write(msg) target handed to
-   iowSetViewer, playing the same role tuimain.py's RichLogViewer/RichLog
-   pairing does for the Textual frontend."""
+   """Scrollable text panel with a draggable scrollbar - the .write(msg)
+   target handed to iowSetViewer so the engine's output lands here."""
 
    def __init__(self, rect):
       self.rect = pygame.Rect(rect)
       self._lines = []
+      # Lines scrolled up from the bottom: 0 = viewing the latest content.
       self._scrollOffset = 0
+      self._dragging = False
 
    def write(self, msg):
-      font = getFont(16)
-      maxWidth = self.rect.width - 12
+      font = getFont(14)
+      maxWidth = self.rect.width - 12 - SCROLLBAR_WIDTH - SCROLLBAR_MARGIN
       for rawLine in str(msg).split("\n"):
          self._lines.extend(wrapText(rawLine, font, maxWidth))
       self._scrollOffset = 0
@@ -199,20 +203,72 @@ class ScrollLog:
       assert on log content without an OS-level rendering check."""
       return "\n".join(self._lines)
 
+   def _visibleCount(self):
+      lineHeight = getFont(14).get_linesize()
+      return max(1, (self.rect.height - 8) // lineHeight)
+
+   def _maxOffset(self):
+      return max(0, len(self._lines) - self._visibleCount())
+
+   def _trackRect(self):
+      return pygame.Rect(self.rect.right - SCROLLBAR_WIDTH - SCROLLBAR_MARGIN, self.rect.y + 4,
+                          SCROLLBAR_WIDTH, self.rect.height - 8)
+
+   def _thumbRect(self):
+      track = self._trackRect()
+      maxOffset = self._maxOffset()
+      if maxOffset <= 0:
+         return None
+
+      thumbHeight = max(SCROLLBAR_MIN_THUMB,
+                         int(track.height * self._visibleCount() / len(self._lines)))
+      travel = track.height - thumbHeight
+      fractionScrolledUp = self._scrollOffset / maxOffset
+      thumbY = track.bottom - thumbHeight - int(travel * fractionScrolledUp)
+      return pygame.Rect(track.x, thumbY, track.width, thumbHeight)
+
+   def _setScrollFraction(self, fractionScrolledUp):
+      maxOffset = self._maxOffset()
+      self._scrollOffset = max(0, min(maxOffset, round(maxOffset * fractionScrolledUp)))
+
    def handle_event(self, event):
       if event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
-         maxOffset = max(0, len(self._lines) - 1)
+         maxOffset = self._maxOffset()
          self._scrollOffset = max(0, min(maxOffset, self._scrollOffset + event.y * 3))
          return True
+
+      if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+         thumb = self._thumbRect()
+         if thumb is not None and thumb.collidepoint(event.pos):
+            self._dragging = True
+            return True
+         track = self._trackRect()
+         if track.collidepoint(event.pos):
+            # Clicked the track above/below the thumb: jump straight there.
+            fractionScrolledUp = 1 - (event.pos[1] - track.y) / track.height
+            self._setScrollFraction(fractionScrolledUp)
+            return True
+
+      elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+         if self._dragging:
+            self._dragging = False
+            return True
+
+      elif event.type == pygame.MOUSEMOTION and self._dragging:
+         track = self._trackRect()
+         fractionScrolledUp = 1 - (event.pos[1] - track.y) / max(1, track.height)
+         self._setScrollFraction(fractionScrolledUp)
+         return True
+
       return False
 
    def draw(self, surface):
       pygame.draw.rect(surface, COLOR_SURFACE, self.rect)
       pygame.draw.rect(surface, COLOR_ACCENT, self.rect, width=1)
 
-      font = getFont(16)
+      font = getFont(14)
       lineHeight = font.get_linesize()
-      visibleCount = max(1, (self.rect.height - 8) // lineHeight)
+      visibleCount = self._visibleCount()
 
       endIndex = len(self._lines) - self._scrollOffset
       startIndex = max(0, endIndex - visibleCount)
@@ -227,6 +283,11 @@ class ScrollLog:
             surface.blit(textSurf, (self.rect.x + 6, y))
          y += lineHeight
       surface.set_clip(previousClip)
+
+      pygame.draw.rect(surface, COLOR_BUTTON, self._trackRect(), border_radius=4)
+      thumb = self._thumbRect()
+      if thumb is not None:
+         pygame.draw.rect(surface, COLOR_ACCENT, thumb, border_radius=4)
 
 
 class Modal:
@@ -254,10 +315,9 @@ class Modal:
       return False
 
    def on_escape(self):
-      """Subclasses override to dismiss on Escape; return True if handled.
-      Default is no-op, matching dialogs in tuimain.py that have no escape
-      binding (e.g. SaveNameScreen does, ConfirmScreen doesn't map escape
-      to Yes - callers decide per dialog)."""
+      """Subclasses override to dismiss on Escape (with whatever result
+      counts as "cancel" for that dialog); return True if handled. Default
+      is no-op."""
       return False
 
    def update(self, dt):
@@ -275,7 +335,7 @@ class Modal:
 class ModalStack:
    """Tracks the currently pushed modal dialogs. Only the top modal
    receives input; the game screen underneath is blocked while any modal
-   is up, matching tuimain.py's screen-stack modality."""
+   is up."""
 
    def __init__(self):
       self._stack = []

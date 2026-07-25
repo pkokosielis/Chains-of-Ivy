@@ -30,8 +30,8 @@ from pygame_main import (
 
 
 def _startNewGame(app):
-   """Dismisses the launch dialog with New Game, landing in the same
-   playable state _startNewGame(pilot) gives tuimain's tests."""
+   """Dismisses the launch dialog with New Game, landing in a fresh
+   playable state."""
    app.modalStack.top.widgets[0].on_click()
 
 
