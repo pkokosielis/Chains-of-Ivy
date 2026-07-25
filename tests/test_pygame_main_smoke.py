@@ -13,7 +13,10 @@ import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
+import pygame
+
 from engine.Item import Item
+from engine.Monster import Monster
 from engine.NPC import NPC
 from engine.Room import Room
 from engine.StoreKeeper import StoreKeeper
@@ -210,37 +213,64 @@ def test_pygame_inventory_drop_button_confirmed_removes_item():
 
 
 # -- Save / restore / load / quit -------------------------------------------
+#
+# Save Game and Load Game are the only save mechanic - there's no separate
+# unnamed quick-save slot. "save" always prompts for a name (pre-filled
+# with an auto-incrementing "saved-N" default so Enter alone works), and
+# both "restore" and "load" open the same named-save picker.
 
-def test_pygame_save_shows_dialog_and_no_cancels():
+def test_pygame_save_shows_prefilled_name_dialog_and_cancel_skips_it():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
    app.handleCommand("save")
-   assert isinstance(app.modalStack.top, ConfirmScreen)
-   app.modalStack.top.widgets[1].on_click()  # No
+   top = app.modalStack.top
+   assert isinstance(top, SaveNameScreen)
+   assert top.nameInput.value == "saved-1"
+
+   top.widgets[2].on_click()  # Cancel
    assert not app.modalStack.active
+   assert app.nextAction.listNamedSaves() == []
 
 
-def test_pygame_save_confirmed_writes_files(tmp_path, monkeypatch):
+def test_pygame_save_confirmed_writes_named_file(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
    app.handleCommand("save")
-   app.modalStack.top.widgets[0].on_click()  # Yes
-   assert (tmp_path / "game.dat").exists()
-   assert (tmp_path / "player.dat").exists()
+   app.modalStack.top.widgets[1].on_click()  # Save, using the prefilled name
+   assert (tmp_path / "saves" / "saved-1.dat").exists()
 
 
-def test_pygame_restore_confirmed_loads_saved_game(tmp_path, monkeypatch):
+def test_pygame_save_default_name_increments_and_ignores_custom_names(tmp_path, monkeypatch):
+   monkeypatch.chdir(tmp_path)
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+
+   app.handleCommand("save")
+   app.modalStack.top.widgets[1].on_click()  # -> saved-1
+   app.handleCommand("save")
+   assert app.modalStack.top.nameInput.value == "saved-2"
+   app.modalStack.top.widgets[1].on_click()  # -> saved-2
+
+   app.nextAction.doNamedSave(app.currentRoom, app.player, "before-boss")
+
+   app.handleCommand("save")
+   assert app.modalStack.top.nameInput.value == "saved-3"
+
+
+def test_pygame_restore_and_load_commands_both_open_the_named_picker(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
    app.handleCommand("save")
-   app.modalStack.top.widgets[0].on_click()
+   app.modalStack.top.widgets[1].on_click()  # -> saved-1
 
    app.onDirectionClick("d")
    assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
 
    app.handleCommand("restore")
+   assert isinstance(app.modalStack.top, LoadPickerScreen)
+   app.modalStack.top.widgets[0].on_click()  # pick "saved-1"
    assert isinstance(app.modalStack.top, ConfirmScreen)
    app.modalStack.top.widgets[0].on_click()  # Yes
 
@@ -265,11 +295,93 @@ def test_pygame_quit_exit_without_saving_exits_app():
    assert app.running is False
 
 
-def test_pygame_exit_button_opens_same_exit_dialog_as_typed_quit():
+def _clickMenuItem(app, label):
+   app.adminMenu.toggleButton.on_click()
+   button = next(b for b in app.adminMenu.itemButtons if b.label == label)
+   button.on_click()
+
+
+def test_pygame_admin_menu_quit_opens_same_exit_dialog_as_typed_quit():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.exitButton.on_click()
+   _clickMenuItem(app, "Quit")
    assert isinstance(app.modalStack.top, ExitScreen)
+
+
+def test_pygame_admin_menu_toggle_opens_and_closes():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   assert app.adminMenu.open is False
+
+   app.adminMenu.toggleButton.on_click()
+   assert app.adminMenu.open is True
+
+   app.adminMenu.toggleButton.on_click()
+   assert app.adminMenu.open is False
+
+
+def test_pygame_admin_menu_outside_click_closes_without_side_effects():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   app.adminMenu.toggleButton.on_click()
+   assert app.adminMenu.open is True
+
+   outsideClick = pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(20, 20))
+   consumed = app.adminMenu.handle_event(outsideClick)
+
+   assert consumed is True
+   assert app.adminMenu.open is False
+   assert not app.modalStack.active
+
+
+def test_pygame_admin_menu_has_no_separate_restore_item():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   labels = [b.label for b in app.adminMenu.itemButtons]
+   assert labels == ["New Game", "Save Game", "Load Game", "Quit"]
+
+
+def test_pygame_admin_menu_save_and_load_open_expected_dialogs():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+
+   _clickMenuItem(app, "Save Game")
+   assert isinstance(app.modalStack.top, SaveNameScreen)
+   assert app.modalStack.top.nameInput.value == "saved-1"
+   app.modalStack.top.widgets[2].on_click()  # Cancel, close it
+   assert not app.modalStack.active
+
+   _clickMenuItem(app, "Load Game")
+   assert isinstance(app.modalStack.top, LoadPickerScreen)
+
+
+def test_pygame_admin_menu_new_game_shows_dialog_and_no_cancels():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   app.onDirectionClick("d")
+   roomBeforeCancel = app.currentRoom.getTitle()
+
+   _clickMenuItem(app, "New Game")
+   assert isinstance(app.modalStack.top, ConfirmScreen)
+   app.modalStack.top.widgets[1].on_click()  # No
+
+   assert not app.modalStack.active
+   assert app.currentRoom.getTitle() == roomBeforeCancel
+
+
+def test_pygame_admin_menu_new_game_confirmed_resets_state():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   app.handleCommand("take all")
+   app.onDirectionClick("d")
+   assert app.player.inventory  # something to lose
+
+   _clickMenuItem(app, "New Game")
+   app.modalStack.top.widgets[0].on_click()  # Yes
+
+   assert not app.modalStack.active
+   assert app.player.inventory == []
+   assert app.currentRoom.getTitle() == "Chorley Park Study"
 
 
 def test_pygame_quit_save_game_prompts_name_then_continue_keeps_playing(tmp_path, monkeypatch):
@@ -537,3 +649,30 @@ def test_pygame_buy_insufficient_gold_skips_dialog():
 
    app.handleCommand("buy Test Tonic")
    assert not app.modalStack.active
+
+
+# -- Text wrapping ------------------------------------------------------------
+
+def test_pygame_attack_messages_do_not_leave_orphan_short_lines():
+   """Regression test: iowWrapPrint used to hard-wrap combat messages to
+   80 character columns, and ScrollLog then re-wrapped that at the
+   panel's actual (narrower) pixel width, routinely leaving a short
+   trailing word or number alone on its own line."""
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+
+   room = Room(997, "Test Arena", "A room for testing combat.", 0, [])
+   monster = Monster(
+      ["A ferociously snarling three-headed hound", 500, 3, "snaps viciously", 10, None, 5])
+   room.addMonsterToRoom(monster)
+   app.currentRoom = room
+
+   # Direction letters ("D" etc) legitimately print one-per-line, so only
+   # inspect lines produced by the attacks themselves, not the exits list
+   # from the starting room's earlier display.
+   linesBeforeCombat = len(app.log._lines)
+   for _ in range(5):
+      app.handleCommand("attack")
+
+   orphanLines = [line for line in app.log._lines[linesBeforeCombat:] if 0 < len(line) <= 3]
+   assert orphanLines == []

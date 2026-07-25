@@ -119,6 +119,80 @@ class Button:
       surface.set_clip(previousClip)
 
 
+class DropdownMenu:
+   """A toggle button that opens a small right-aligned list of item
+   buttons below it - for a handful of admin actions (new game, save,
+   restore, quit) that don't warrant a full dialog of their own to pick
+   between. Unlike Modal, this doesn't dim the screen or block input to
+   the rest of the app; it just closes itself on an outside click, an
+   item click, or Escape."""
+
+   ITEM_HEIGHT = 32
+   ITEM_GAP = 4
+
+   def __init__(self, rect, label, items):
+      """items is a list of (item_label, callback) pairs."""
+      self.toggleButton = Button(rect, label, on_click=self._toggle)
+      self.open = False
+      self.itemButtons = []
+
+      font = getFont(15)
+      width = max(self.toggleButton.rect.width,
+                  max(font.size(itemLabel)[0] for itemLabel, _cb in items) + 24)
+      x = self.toggleButton.rect.right - width
+      y = self.toggleButton.rect.bottom + DropdownMenu.ITEM_GAP
+      for itemLabel, callback in items:
+         itemRect = (x, y, width, DropdownMenu.ITEM_HEIGHT)
+         self.itemButtons.append(Button(itemRect, itemLabel, on_click=self._pick(callback)))
+         y += DropdownMenu.ITEM_HEIGHT + DropdownMenu.ITEM_GAP
+
+   def _toggle(self):
+      self.open = not self.open
+
+   def _pick(self, callback):
+      def onClick():
+         self.open = False
+         callback()
+      return onClick
+
+   def _panelRect(self):
+      panel = self.itemButtons[0].rect.unionall([b.rect for b in self.itemButtons[1:]])
+      return panel.inflate(8, 8)
+
+   def handle_event(self, event):
+      if self.toggleButton.handle_event(event):
+         return True
+
+      if not self.open:
+         return False
+
+      if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+         self.open = False
+         return True
+
+      for button in self.itemButtons:
+         if button.handle_event(event):
+            return True
+
+      if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+         # Swallow the click either way: inside the panel but not on a
+         # button, or fully outside it - neither should reach whatever's
+         # drawn underneath.
+         self.open = False
+         return True
+
+      return False
+
+   def draw(self, surface):
+      self.toggleButton.draw(surface)
+      if not self.open:
+         return
+      pygame.draw.rect(surface, COLOR_SURFACE, self._panelRect(), border_radius=4)
+      pygame.draw.rect(surface, COLOR_ACCENT, self._panelRect(), width=1, border_radius=4)
+      for button in self.itemButtons:
+         button.draw(surface)
+
+
 class TextInput:
    """A single-line text box. Enter (or an explicit submit) calls
    on_submit(value) and clears the field."""

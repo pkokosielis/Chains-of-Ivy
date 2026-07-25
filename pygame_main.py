@@ -8,6 +8,7 @@ resolution limits. The engine (engine/*.py) is untouched and
 frontend-agnostic: everything routes through iowPrint/iowWrapPrint,
 which just needs an object exposing write(msg) - here, a ScrollLog.
 """
+import re
 import sys
 
 if (sys.version_info < (3, 8)):
@@ -18,6 +19,7 @@ import pygame
 
 from pygame_widgets import (
    Button,
+   DropdownMenu,
    TextInput,
    ScrollLog,
    Modal,
@@ -169,9 +171,12 @@ class ExitScreen(Modal):
 
 
 class SaveNameScreen(Modal):
-   """Prompts for a name to save the game under."""
+   """Prompts for a name to save the game under. default, when given, is
+   pre-filled into the name field (e.g. an auto-incrementing "saved.N" so
+   saving never requires typing anything, but the name can still be
+   edited first)."""
 
-   def __init__(self):
+   def __init__(self, default=""):
       rect = centeredRect(460, 220)
       super().__init__(rect)
       self.titleRect = pygame.Rect(rect.x + 20, rect.y + 16, rect.width - 40, 24)
@@ -180,6 +185,7 @@ class SaveNameScreen(Modal):
 
       inputRect = (rect.x + 20, rect.y + 50, rect.width - 40, 34)
       self.nameInput = TextInput(inputRect, placeholder="e.g. before-the-boss", on_submit=self._trySubmit)
+      self.nameInput.value = default
       self.widgets.append(self.nameInput)
 
       buttonWidth = (rect.width - 60) // 2
@@ -351,8 +357,14 @@ class ChainsOfIvyPygameApp:
       self.inventoryPaneRect = pygame.Rect(690, 60, 390, 580)
       self.inventoryButtons = []
 
-      self.exitButton = Button((WINDOW_WIDTH - 110, 14, 90, 34), "Exit",
-                                on_click=self.confirmExit, variant="error")
+      self.adminMenu = DropdownMenu(
+         (WINDOW_WIDTH - 110, 14, 90, 34), "Menu",
+         [
+            ("New Game", self.confirmNewGame),
+            ("Save Game", self.confirmSaveAs),
+            ("Load Game", self.confirmLoad),
+            ("Quit", self.confirmExit),
+         ])
       self.refreshDirections()
 
       self.modalStack.push(StartScreen(), self.handleStartChoice)
@@ -394,16 +406,12 @@ class ChainsOfIvyPygameApp:
          self.confirmExit()
          return
 
-      if action == "restore":
-         self.confirmRestore()
-         return
-
-      if action == "load":
+      if action in ("restore", "load"):
          self.confirmLoad()
          return
 
       if action == "save":
-         self.confirmSave()
+         self.confirmSaveAs()
          return
 
       if action == "talk":
@@ -535,7 +543,7 @@ class ChainsOfIvyPygameApp:
 
          self.modalStack.push(PostSaveScreen(), handle_continue)
 
-      self.modalStack.push(SaveNameScreen(), handle_name)
+      self.modalStack.push(SaveNameScreen(default=self.nextDefaultSaveName()), handle_name)
 
    def confirmLoad(self):
       def handle_pick(name):
@@ -559,28 +567,41 @@ class ChainsOfIvyPygameApp:
 
       self.modalStack.push(LoadPickerScreen(self.nextAction.listNamedSaves()), handle_pick)
 
-   def confirmRestore(self):
+   def nextDefaultSaveName(self):
+      """Suggests the next "saved-N" name that isn't already taken, so
+      Save Game never requires typing anything - just Enter - while still
+      letting the name be edited first. Uses a hyphen rather than a dot
+      since sanitizeSaveName() strips dots - a dot-based default would
+      silently turn into "saved1" on disk, no longer matching what was
+      shown or what this method looks for next time."""
+      existingNumbers = []
+      for name in self.nextAction.listNamedSaves():
+         match = re.match(r"^saved-(\d+)$", name)
+         if match:
+            existingNumbers.append(int(match.group(1)))
+      return "saved-" + str(max(existingNumbers, default=0) + 1)
+
+   def confirmSaveAs(self):
+      def handle_name(name):
+         if not name:
+            iowPrint("save is cancelled.")
+            return
+         self.trySave(self.nextAction.doNamedSave, self.currentRoom, self.player, name)
+
+      self.modalStack.push(SaveNameScreen(default=self.nextDefaultSaveName()), handle_name)
+
+   def confirmNewGame(self):
       def handle_response(confirmed):
          if confirmed:
-            restored = self.tryRestore(self.nextAction.doRestore, self.currentRoom, self.player)
-            if restored is not None:
-               self.currentRoom, self.player = restored
-            self.refreshUI()
+            iowPrint("You feel your soul yanked back into your body. A new adventure begins!\n")
+            self.startNewGame()
+            self.finishStartup()
          else:
-            iowPrint("restore is cancelled.")
+            iowPrint("new game is cancelled.")
 
       self.modalStack.push(
-         ConfirmScreen("Are you sure you want to restore the last saved game?\nCurrent progress will be lost."),
+         ConfirmScreen("Are you sure you want to start a new game?\nCurrent progress will be lost."),
          handle_response)
-
-   def confirmSave(self):
-      def handle_response(confirmed):
-         if confirmed:
-            self.trySave(self.nextAction.doSave, self.currentRoom, self.player)
-         else:
-            iowPrint("save is cancelled.")
-
-      self.modalStack.push(ConfirmScreen("Are you sure you want to save the current game?"), handle_response)
 
    def getPendingQuestNpc(self):
       if not self.currentRoom or not self.currentRoom.npc:
@@ -683,9 +704,9 @@ class ChainsOfIvyPygameApp:
          + "   Weapon: " + weaponName
       )
       # Wraps (rather than a fixed single-line blit) since this can run
-      # longer than the space left before the Exit button - e.g. a long
-      # weapon name - and the whole top bar (y 0-60) is reserved for it.
-      statsRect = pygame.Rect(20, 4, self.exitButton.rect.x - 30, 52)
+      # longer than the space left before the admin menu button - e.g. a
+      # long weapon name - and the whole top bar (y 0-60) is reserved for it.
+      statsRect = pygame.Rect(20, 4, self.adminMenu.toggleButton.rect.x - 30, 52)
       drawWrappedText(self.screen, statsText, statsRect, getFont(13, bold=True), COLOR_TEXT, align="left")
 
    def drawRoomImagePane(self):
@@ -732,12 +753,15 @@ class ChainsOfIvyPygameApp:
    def draw(self):
       self.screen.fill(COLOR_BACKGROUND)
       self.drawStatsBar()
-      self.exitButton.draw(self.screen)
       self.drawRoomImagePane()
       self.log.draw(self.screen)
       self.commandInput.draw(self.screen)
       self.drawInventoryPane()
       self.drawDirectionPane()
+      # Drawn last (and handled first, below) so its dropdown panel - when
+      # open - visually sits on top of, and captures clicks before, the
+      # rest of the main screen.
+      self.adminMenu.draw(self.screen)
       self.modalStack.draw(self.screen)
       pygame.display.flip()
 
@@ -750,7 +774,9 @@ class ChainsOfIvyPygameApp:
          self.modalStack.handle_event(event)
          return
 
-      self.exitButton.handle_event(event)
+      if self.adminMenu.handle_event(event):
+         return
+
       self.commandInput.handle_event(event)
       self.log.handle_event(event)
       for button in self.directionButtons.values():
