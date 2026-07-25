@@ -30,7 +30,9 @@ from pygame_widgets import (
    COLOR_TEXT,
    COLOR_TEXT_DIM,
    COLOR_ERROR,
+   COLOR_BUTTON_DISABLED,
    drawWrappedText,
+   drawTopAlignedText,
    getFont,
 )
 
@@ -344,8 +346,11 @@ class ChainsOfIvyPygameApp:
 
       self.modalStack = ModalStack()
 
-      self.roomImagePaneRect = pygame.Rect(20, 60, 650, 440)
-      self.log = ScrollLog((20, 510, 650, 244))
+      # Left column: the Scene pane (room title + art + description) always
+      # has content, unlike the old image-only pane that sat empty for
+      # every room without art. Log and command input beneath it.
+      self.scenePaneRect = pygame.Rect(20, 60, 650, 380)
+      self.log = ScrollLog((20, 452, 650, 300))
       iowSetViewer(self.log)
 
       self.commandInput = TextInput((20, 764, 650, 36), placeholder="What do you do?",
@@ -354,7 +359,12 @@ class ChainsOfIvyPygameApp:
       self.directionButtons = {}
       self._buildDirectionButtons()
 
-      self.inventoryPaneRect = pygame.Rect(690, 60, 390, 580)
+      # Right column: who/what is in the room (with click-to-act buttons),
+      # then inventory, then movement.
+      self.herePaneRect = pygame.Rect(690, 60, 390, 250)
+      self.hereRows = []
+
+      self.inventoryPaneRect = pygame.Rect(690, 322, 390, 314)
       self.inventoryButtons = []
 
       self.adminMenu = DropdownMenu(
@@ -652,6 +662,7 @@ class ChainsOfIvyPygameApp:
    def refreshUI(self):
       self.refreshDirections()
       self.refreshInventory()
+      self.refreshHere()
 
    def refreshDirections(self):
       room = self.currentRoom
@@ -686,6 +697,44 @@ class ChainsOfIvyPygameApp:
          self.inventoryButtons.append((item, useButton, dropButton))
          y += rowHeight + rowGap
 
+   def refreshHere(self):
+      """Rebuilds the Here pane's rows: one per NPC/storekeeper/monster/item
+      in the current room, each with a button for the verb that applies to
+      it (Talk/Attack/Take). Talk and Attack route through handleCommand
+      the same way the typed commands do, since those actions already
+      apply to everyone/everything present at once (talk() greets every
+      NPC in the room; attack() swings at every monster in it) - a button
+      per row is about showing who's here, not a separate per-target
+      action the engine doesn't support."""
+      self.hereRows = []
+      room = self.currentRoom
+      if not room:
+         return
+
+      rowHeight, rowGap = 34, 8
+      buttonWidth = 64
+      buttonX = self.herePaneRect.right - 10 - buttonWidth
+      y = self.herePaneRect.y + 40
+
+      def addRow(label, buttonLabel, callback, hpFraction=None, hpText=None):
+         nonlocal y
+         button = Button((buttonX, y, buttonWidth, rowHeight - 8), buttonLabel, on_click=callback)
+         self.hereRows.append((label, button, hpFraction, hpText))
+         y += rowHeight + rowGap
+
+      for npc in room.npc:
+         addRow(npc.getName(), "Talk", lambda: self.handleCommand("talk"))
+      if room.storeKeeper:
+         addRow(room.storeKeeper.getName(), "Talk", lambda: self.handleCommand("talk"))
+      for monster in room.monsters:
+         maxHp = monster.getMaxHP()
+         fraction = max(0.0, min(1.0, monster.hp / maxHp)) if maxHp else 0.0
+         hpText = str(max(0, monster.hp)) + "/" + str(maxHp)
+         addRow(monster.getName(), "Attack", lambda: self.handleCommand("attack"),
+                hpFraction=fraction, hpText=hpText)
+      for item in room.items:
+         addRow(item.getName(), "Take", lambda it=item: self.handleCommand("take " + it.getName()))
+
    def onUseItem(self, item):
       iowPrint("\n>>: use " + item.getName())
       self.player.useItem(item.getName())
@@ -709,17 +758,81 @@ class ChainsOfIvyPygameApp:
       statsRect = pygame.Rect(20, 4, self.adminMenu.toggleButton.rect.x - 30, 52)
       drawWrappedText(self.screen, statsText, statsRect, getFont(13, bold=True), COLOR_TEXT, align="left")
 
-   def drawRoomImagePane(self):
-      rect = self.roomImagePaneRect
+   def drawScenePane(self):
+      """The room title, art (when this room has any), and description -
+      always has content, unlike the old image-only pane that sat empty
+      for every room without art. The title is drawn here (not just
+      logged) so where you are never scrolls out of view."""
+      rect = self.scenePaneRect
       pygame.draw.rect(self.screen, COLOR_SURFACE, rect)
       pygame.draw.rect(self.screen, COLOR_ACCENT, rect, width=1)
-
-      imagePath = ROOM_IMAGES.get(self.currentRoom.getID()) if self.currentRoom else None
-      if not imagePath:
+      if not self.currentRoom:
          return
-      image = loadScaledImage(imagePath, rect.width - 8, rect.height - 8)
-      if image is not None:
-         self.screen.blit(image, image.get_rect(center=rect.center))
+
+      padding = 12
+      titleRect = pygame.Rect(rect.x + padding, rect.y + padding, rect.width - padding * 2, 26)
+      titleSurf = getFont(19, bold=True, serif=True).render(self.currentRoom.getTitle(), True, COLOR_TEXT)
+      previousClip = self.screen.get_clip()
+      self.screen.set_clip(titleRect)
+      self.screen.blit(titleSurf, (titleRect.x, titleRect.y))
+      self.screen.set_clip(previousClip)
+
+      contentY = titleRect.bottom + 8
+      imagePath = ROOM_IMAGES.get(self.currentRoom.getID())
+      if imagePath:
+         image = loadScaledImage(imagePath, rect.width - padding * 2, 150)
+         if image is not None:
+            imageRect = image.get_rect()
+            imageRect.midtop = (rect.centerx, contentY)
+            self.screen.blit(image, imageRect)
+            contentY = imageRect.bottom + 10
+
+      descRect = pygame.Rect(rect.x + padding, contentY, rect.width - padding * 2,
+                              max(0, rect.bottom - contentY - padding))
+      drawTopAlignedText(self.screen, self.currentRoom.description.strip(), descRect,
+                          getFont(15, serif=True), COLOR_TEXT)
+
+   def drawHerePane(self):
+      """Lists NPCs, the storekeeper, monsters (with an HP bar), and items
+      in the current room, each with a button for the applicable verb -
+      so combat, conversation, and picking things up all have a mouse
+      path, not just movement and inventory management."""
+      rect = self.herePaneRect
+      pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
+      pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
+      titleSurf = getFont(14, bold=True).render("Here", True, COLOR_TEXT)
+      self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
+
+      if not self.hereRows:
+         emptySurf = getFont(13).render("Nothing else here.", True, COLOR_TEXT_DIM)
+         self.screen.blit(emptySurf, (rect.x + 10, rect.y + 40))
+         return
+
+      previousClip = self.screen.get_clip()
+      self.screen.set_clip(rect)
+      nameFont = getFont(13)
+      hpFont = getFont(11)
+      for label, button, hpFraction, hpText in self.hereRows:
+         nameSurf = nameFont.render(label, True, COLOR_TEXT)
+         nameY = button.rect.y + (button.rect.height - nameSurf.get_height()) // 2 \
+            if hpFraction is None else button.rect.y - 2
+         self.screen.blit(nameSurf, (rect.x + 10, nameY))
+
+         if hpFraction is not None:
+            # Fixed width (not "fill the gap up to the button") so the HP
+            # number drawn after it never runs into the button regardless
+            # of how long the button-adjacent gap happens to be.
+            barRect = pygame.Rect(rect.x + 10, button.rect.bottom - 6, 70, 6)
+            pygame.draw.rect(self.screen, COLOR_BUTTON_DISABLED, barRect, border_radius=3)
+            fillRect = pygame.Rect(barRect.x, barRect.y, int(barRect.width * hpFraction), barRect.height)
+            barColor = COLOR_ERROR if hpFraction < 0.3 else COLOR_ACCENT
+            if fillRect.width > 0:
+               pygame.draw.rect(self.screen, barColor, fillRect, border_radius=3)
+            hpSurf = hpFont.render(hpText, True, COLOR_TEXT_DIM)
+            self.screen.blit(hpSurf, (barRect.right + 6, barRect.y - 3))
+
+         button.draw(self.screen)
+      self.screen.set_clip(previousClip)
 
    def drawInventoryPane(self):
       rect = self.inventoryPaneRect
@@ -753,9 +866,10 @@ class ChainsOfIvyPygameApp:
    def draw(self):
       self.screen.fill(COLOR_BACKGROUND)
       self.drawStatsBar()
-      self.drawRoomImagePane()
+      self.drawScenePane()
       self.log.draw(self.screen)
       self.commandInput.draw(self.screen)
+      self.drawHerePane()
       self.drawInventoryPane()
       self.drawDirectionPane()
       # Drawn last (and handled first, below) so its dropdown panel - when
@@ -784,6 +898,8 @@ class ChainsOfIvyPygameApp:
       for _item, useButton, dropButton in self.inventoryButtons:
          useButton.handle_event(event)
          dropButton.handle_event(event)
+      for _label, button, _hpFraction, _hpText in self.hereRows:
+         button.handle_event(event)
 
    def run(self):
       while self.running:

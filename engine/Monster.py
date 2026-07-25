@@ -6,6 +6,7 @@ class Monster:
    def __init__(self, monsterParms, imgFile=None):
       self.name = monsterParms[0]
       self.hp = int(monsterParms[1])
+      self.maxHp = self.hp
       self.maxAttack = int(monsterParms[2])
       self.attackType = monsterParms[3]
       self.expGiven = int(monsterParms[4])
@@ -34,6 +35,9 @@ class Monster:
 
    def getName(self):
       return self.name
+
+   def getMaxHP(self):
+      return self.maxHp
 
    def subtractFromHP(self, hitAmount):
       self.hp -= hitAmount

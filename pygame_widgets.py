@@ -26,12 +26,16 @@ COLOR_MODAL_OVERLAY = (0, 0, 0, 160)
 _fontCache = {}
 
 
-def getFont(size, bold=False):
-   """Returns a cached monospace SysFont. Lazy so pygame.font doesn't need
-   to be initialized until a widget actually draws."""
-   key = (size, bold)
+def getFont(size, bold=False, serif=False):
+   """Returns a cached SysFont: monospace by default (for the log, stats,
+   and anything tabular), or a serif face when serif=True (for room
+   titles/descriptions, which read as prose rather than terminal output).
+   Lazy so pygame.font doesn't need to be initialized until a widget
+   actually draws."""
+   key = (size, bold, serif)
    if key not in _fontCache:
-      _fontCache[key] = pygame.font.SysFont("dejavusansmono,monospace", size, bold=bold)
+      family = "georgia,garamond,dejavuserif,serif" if serif else "dejavusansmono,monospace"
+      _fontCache[key] = pygame.font.SysFont(family, size, bold=bold)
    return _fontCache[key]
 
 
@@ -49,6 +53,28 @@ def drawWrappedText(surface, text, rect, font, color, align="center"):
       x = rect.x + (rect.width - textSurf.get_width()) // 2 if align == "center" else rect.x
       surface.blit(textSurf, (x, y))
       y += lineHeight
+
+
+def drawTopAlignedText(surface, text, rect, font, color, align="left"):
+   """Draws word-wrapped text starting at the top of rect, clipped to it,
+   rather than drawWrappedText's vertical centering - for prose that
+   should begin right below a heading/image rather than float in the
+   middle of its box. Overflow is clipped, not scrolled."""
+   lines = []
+   for rawLine in text.split("\n"):
+      lines.extend(wrapText(rawLine, font, rect.width))
+
+   previousClip = surface.get_clip()
+   surface.set_clip(rect)
+   lineHeight = font.get_linesize()
+   y = rect.y
+   for line in lines:
+      if line:
+         textSurf = font.render(line, True, color)
+         x = rect.x + (rect.width - textSurf.get_width()) // 2 if align == "center" else rect.x
+         surface.blit(textSurf, (x, y))
+      y += lineHeight
+   surface.set_clip(previousClip)
 
 
 def wrapText(text, font, maxWidth):
