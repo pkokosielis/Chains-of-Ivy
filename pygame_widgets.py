@@ -11,7 +11,14 @@ import pygame
 
 COLOR_BACKGROUND = (24, 26, 32)
 COLOR_SURFACE = (36, 39, 48)
-COLOR_ACCENT = (94, 176, 200)
+# Warm brass/amber rather than the previous cool cyan, to sit alongside the
+# art (lamplight, brass, mahogany) instead of fighting it. Reserved for
+# focus/active state - the one thing on screen that should currently draw
+# the eye - not used as a default idle-panel border; see COLOR_BORDER.
+COLOR_ACCENT = (196, 154, 82)
+# Idle-panel border: visible against the background without competing with
+# COLOR_ACCENT's "this is focused/active" meaning.
+COLOR_BORDER = (72, 76, 90)
 COLOR_TEXT = (230, 230, 230)
 COLOR_TEXT_DIM = (150, 155, 165)
 COLOR_BUTTON = (52, 56, 68)
@@ -21,6 +28,9 @@ COLOR_PRIMARY = (47, 99, 122)
 COLOR_PRIMARY_HOVER = (60, 122, 148)
 COLOR_ERROR = (150, 60, 60)
 COLOR_ERROR_HOVER = (176, 74, 74)
+# A healthy HP bar reads as "fine", not "this is the focused thing" - its
+# own semantic color, decoupled from COLOR_ACCENT.
+COLOR_HP_OK = (108, 168, 118)
 COLOR_MODAL_OVERLAY = (0, 0, 0, 160)
 
 _fontCache = {}
@@ -261,7 +271,7 @@ class TextInput:
 
    def draw(self, surface):
       pygame.draw.rect(surface, COLOR_SURFACE, self.rect)
-      pygame.draw.rect(surface, COLOR_ACCENT if self.focused else COLOR_TEXT_DIM, self.rect, width=1)
+      pygame.draw.rect(surface, COLOR_ACCENT if self.focused else COLOR_BORDER, self.rect, width=1)
 
       font = getFont(15)
       showingPlaceholder = not self.value and not self.focused
@@ -364,7 +374,7 @@ class ScrollLog:
 
    def draw(self, surface):
       pygame.draw.rect(surface, COLOR_SURFACE, self.rect)
-      pygame.draw.rect(surface, COLOR_ACCENT, self.rect, width=1)
+      pygame.draw.rect(surface, COLOR_BORDER, self.rect, width=1)
 
       font = getFont(14)
       lineHeight = font.get_linesize()

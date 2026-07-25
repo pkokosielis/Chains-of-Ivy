@@ -99,10 +99,9 @@ class Room:
                   showFirstImageOnly += 1
             iowPrint ("A lurking " + monster.getName() + " eyes you fiercely.")
       if self.items:
-         iowPrint ("You see the following items:") 
+         iowPrint ("You see the following items:")
          for item in self.items:
             iowPrint (item.getName())
-      self.getExits()
 
    def setAdjacentNorth(self, someRoom):
       self.north = someRoom
@@ -130,18 +129,3 @@ class Room:
          iowPrint ("A passage " + passage + " has been unblocked.")
       self.blockedDirections = []
 
-
-   def getExits(self):
-      iowPrint ("Exits are:")
-      if (self.north != None and not "North" in self.blockedDirections):
-         iowPrint ("N")
-      if (self.south != None and not "South" in self.blockedDirections):
-         iowPrint ("S")
-      if (self.east != None and not "East" in self.blockedDirections):
-         iowPrint ("E")
-      if (self.west != None and not "West" in self.blockedDirections):
-         iowPrint ("W")
-      if (self.up != None and not "Up" in self.blockedDirections):
-         iowPrint ("U")
-      if (self.down != None and not "Down" in self.blockedDirections):
-         iowPrint ("D")

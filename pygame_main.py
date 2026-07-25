@@ -27,9 +27,11 @@ from pygame_widgets import (
    COLOR_BACKGROUND,
    COLOR_SURFACE,
    COLOR_ACCENT,
+   COLOR_BORDER,
    COLOR_TEXT,
    COLOR_TEXT_DIM,
    COLOR_ERROR,
+   COLOR_HP_OK,
    COLOR_BUTTON_DISABLED,
    drawWrappedText,
    drawTopAlignedText,
@@ -44,6 +46,11 @@ from createdRooms import *
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 820
+
+# How long the Stats bar / Inventory pane border flashes accent-colored
+# after "stats"/"inventory" is typed, pointing at the panel that already
+# has the answer instead of dumping the same numbers into the log again.
+HIGHLIGHT_PULSE_SECONDS = 0.6
 
 BANNER_IMAGE_PATH = ".images/game_banner.png"
 # Maps a Room's numeric ID to the art shown for it on the main screen.
@@ -91,6 +98,28 @@ DIRECTION_INFO = [
    ("w", "west", "West", "W"),
    ("u", "up", "Up", "Up"),
    ("d", "down", "Down", "Down"),
+]
+
+# Grid position (col, row) for each direction button, laid out as a compass
+# rose - N above, S below, W/E either side of center, Up/Down flanking the
+# W/E row - rather than a left-to-right list, so the shape reads as a map.
+DIRECTION_GRID = {
+   "n": (2, 0),
+   "u": (0, 1),
+   "w": (1, 1),
+   "e": (3, 1),
+   "d": (4, 1),
+   "s": (2, 2),
+}
+
+# (Character attribute, display label) for the four equip slots shown at
+# the top of the Inventory pane, so "what am I wearing" doesn't collapse
+# into a single Armor Class number.
+EQUIP_SLOTS = [
+   ("weapon", "Weapon"),
+   ("helmet", "Helmet"),
+   ("suit", "Suit"),
+   ("boots", "Boots"),
 ]
 
 
@@ -141,7 +170,7 @@ class ConfirmScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, self.question, self.questionRect, getFont(15), COLOR_TEXT)
+      drawWrappedText(surface, self.question, self.questionRect, getFont(15, serif=True), COLOR_TEXT)
 
 
 class ExitScreen(Modal):
@@ -169,7 +198,7 @@ class ExitScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "What would you like to do?", self.titleRect, getFont(15), COLOR_TEXT)
+      drawWrappedText(surface, "What would you like to do?", self.titleRect, getFont(15, serif=True), COLOR_TEXT)
 
 
 class SaveNameScreen(Modal):
@@ -210,7 +239,7 @@ class SaveNameScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Name this save:", self.titleRect, getFont(15), COLOR_TEXT, align="left")
+      drawWrappedText(surface, "Name this save:", self.titleRect, getFont(15, serif=True), COLOR_TEXT, align="left")
       if self.showError:
          drawWrappedText(surface, "Please enter a valid name.", self.errorRect, getFont(12),
                           COLOR_ERROR, align="left")
@@ -237,7 +266,7 @@ class PostSaveScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Game saved! Continue playing?", self.questionRect, getFont(15), COLOR_TEXT)
+      drawWrappedText(surface, "Game saved! Continue playing?", self.questionRect, getFont(15, serif=True), COLOR_TEXT)
 
 
 DEFAULT_BANNER_TEXT = "Chains of Ivy"
@@ -288,7 +317,7 @@ class StartScreen(Modal):
       if self.bannerImage is not None:
          surface.blit(self.bannerImage, self.bannerImage.get_rect(center=self.bannerRect.center))
       else:
-         drawWrappedText(surface, self.banner, self.bannerRect, getFont(17, bold=True), COLOR_TEXT)
+         drawWrappedText(surface, self.banner, self.bannerRect, getFont(19, bold=True, serif=True), COLOR_TEXT)
 
 
 class LoadPickerScreen(Modal):
@@ -325,7 +354,7 @@ class LoadPickerScreen(Modal):
 
    def draw(self, surface):
       super().draw(surface)
-      drawWrappedText(surface, "Load which saved game?", self.titleRect, getFont(15), COLOR_TEXT, align="left")
+      drawWrappedText(surface, "Load which saved game?", self.titleRect, getFont(15, serif=True), COLOR_TEXT, align="left")
       if self.noSavesRect:
          drawWrappedText(surface, "No saved games found.", self.noSavesRect, getFont(14),
                           COLOR_TEXT_DIM, align="left")
@@ -343,6 +372,9 @@ class ChainsOfIvyPygameApp:
       self.nextAction = PlayerAction()
       self.currentRoom = None
       self.player = None
+
+      self.statsHighlightTimer = 0.0
+      self.inventoryHighlightTimer = 0.0
 
       self.modalStack = ModalStack()
 
@@ -366,6 +398,7 @@ class ChainsOfIvyPygameApp:
 
       self.inventoryPaneRect = pygame.Rect(690, 322, 390, 314)
       self.inventoryButtons = []
+      self.inventoryNameWidth = self.inventoryPaneRect.width - 20 - 92 - 8 - 60 - 8
 
       self.adminMenu = DropdownMenu(
          (WINDOW_WIDTH - 110, 14, 90, 34), "Menu",
@@ -380,16 +413,22 @@ class ChainsOfIvyPygameApp:
       self.modalStack.push(StartScreen(), self.handleStartChoice)
 
    def _buildDirectionButtons(self):
+      """Lays out N/S/E/W/Up/Down as a compass rose (DIRECTION_GRID) rather
+      than a left-to-right list of six buttons, so the shape reads as a
+      map - N above, S below, W/E either side of center, Up/Down flanking
+      that middle row."""
       self.directionPaneRect = pygame.Rect(690, 650, 390, 150)
-      btnWidth, btnHeight, gap = 80, 32, 8
-      startX = self.directionPaneRect.x + 10
-      compassY = self.directionPaneRect.y + 34
-      updownY = compassY + btnHeight + gap
+      rect = self.directionPaneRect
+      btnWidth, btnHeight, gap = 64, 28, 8
+      columns = 5
+      gridWidth = columns * btnWidth + (columns - 1) * gap
+      startX = rect.x + (rect.width - gridWidth) // 2
+      topY = rect.y + 34
 
-      for index, (actionChar, _attrName, _blockedLabel, label) in enumerate(DIRECTION_INFO):
-         row, col = divmod(index, 4)
+      for actionChar, _attrName, _blockedLabel, label in DIRECTION_INFO:
+         col, row = DIRECTION_GRID[actionChar]
          x = startX + col * (btnWidth + gap)
-         y = compassY if row == 0 else updownY
+         y = topY + row * (btnHeight + gap)
          button = Button((x, y, btnWidth, btnHeight), label,
                           on_click=lambda a=actionChar: self.onDirectionClick(a))
          self.directionButtons[actionChar] = button
@@ -422,6 +461,17 @@ class ChainsOfIvyPygameApp:
 
       if action == "save":
          self.confirmSaveAs()
+         return
+
+      if action == "stats":
+         # Stats are already always visible in the top bar; pulse it
+         # instead of dumping the same numbers into the log again.
+         self.statsHighlightTimer = HIGHLIGHT_PULSE_SECONDS
+         return
+
+      if action == "inventory":
+         # Same reasoning: the Inventory pane already shows this.
+         self.inventoryHighlightTimer = HIGHLIGHT_PULSE_SECONDS
          return
 
       if action == "talk":
@@ -671,6 +721,12 @@ class ChainsOfIvyPygameApp:
          button.enabled = bool(room) and getattr(room, attrName) is not None \
             and blockedLabel not in room.blockedDirections
 
+   def _inventoryItemsStartY(self):
+      """Y where the item-row list begins, below the title and the four
+      equip-slot lines drawInventoryPane() always renders above it - kept
+      as one method so the two never drift apart."""
+      return self.inventoryPaneRect.y + 32 + len(EQUIP_SLOTS) * 16 + 16
+
    def refreshInventory(self):
       self.inventoryButtons = []
       if not self.player or not self.player.inventory:
@@ -682,7 +738,11 @@ class ChainsOfIvyPygameApp:
       useWidth, dropWidth, buttonGap = 92, 60, 8
       x = self.inventoryPaneRect.x + 10
       nameWidth = self.inventoryPaneRect.width - 20 - useWidth - buttonGap - dropWidth - buttonGap
-      y = self.inventoryPaneRect.y + 40
+      # Stashed for drawInventoryPane(), which clips item-name text (a
+      # quest item's name plus its "-> NPC" suffix can otherwise run into
+      # the buttons) to exactly this width.
+      self.inventoryNameWidth = nameWidth
+      y = self._inventoryItemsStartY()
 
       for item in self.player.inventory:
          equipped = item is self.player.weapon or item is self.player.helmet \
@@ -756,7 +816,9 @@ class ChainsOfIvyPygameApp:
       # longer than the space left before the admin menu button - e.g. a
       # long weapon name - and the whole top bar (y 0-60) is reserved for it.
       statsRect = pygame.Rect(20, 4, self.adminMenu.toggleButton.rect.x - 30, 52)
-      drawWrappedText(self.screen, statsText, statsRect, getFont(13, bold=True), COLOR_TEXT, align="left")
+      if self.statsHighlightTimer > 0:
+         pygame.draw.rect(self.screen, COLOR_ACCENT, statsRect.inflate(12, 8), width=2, border_radius=4)
+      drawWrappedText(self.screen, statsText, statsRect, getFont(14, bold=True), COLOR_TEXT, align="left")
 
    def drawScenePane(self):
       """The room title, art (when this room has any), and description -
@@ -765,7 +827,7 @@ class ChainsOfIvyPygameApp:
       logged) so where you are never scrolls out of view."""
       rect = self.scenePaneRect
       pygame.draw.rect(self.screen, COLOR_SURFACE, rect)
-      pygame.draw.rect(self.screen, COLOR_ACCENT, rect, width=1)
+      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1)
       if not self.currentRoom:
          return
 
@@ -799,7 +861,7 @@ class ChainsOfIvyPygameApp:
       path, not just movement and inventory management."""
       rect = self.herePaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
-      pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
+      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1, border_radius=4)
       titleSurf = getFont(14, bold=True).render("Here", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
 
@@ -825,7 +887,7 @@ class ChainsOfIvyPygameApp:
             barRect = pygame.Rect(rect.x + 10, button.rect.bottom - 6, 70, 6)
             pygame.draw.rect(self.screen, COLOR_BUTTON_DISABLED, barRect, border_radius=3)
             fillRect = pygame.Rect(barRect.x, barRect.y, int(barRect.width * hpFraction), barRect.height)
-            barColor = COLOR_ERROR if hpFraction < 0.3 else COLOR_ACCENT
+            barColor = COLOR_ERROR if hpFraction < 0.3 else COLOR_HP_OK
             if fillRect.width > 0:
                pygame.draw.rect(self.screen, barColor, fillRect, border_radius=3)
             hpSurf = hpFont.render(hpText, True, COLOR_TEXT_DIM)
@@ -837,27 +899,60 @@ class ChainsOfIvyPygameApp:
    def drawInventoryPane(self):
       rect = self.inventoryPaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
-      pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
+      highlighted = self.inventoryHighlightTimer > 0
+      borderColor = COLOR_ACCENT if highlighted else COLOR_BORDER
+      pygame.draw.rect(self.screen, borderColor, rect, width=(2 if highlighted else 1), border_radius=4)
       titleSurf = getFont(14, bold=True).render("Inventory", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
 
+      # Equip slots always show, even with nothing carried, since "what am
+      # I wearing" is meaningful on its own rather than collapsing into a
+      # single Armor Class number.
+      equipFont = getFont(12)
+      equipY = rect.y + 32
+      player = self.player
+      for attrName, label in EQUIP_SLOTS:
+         equipped = getattr(player, attrName) if player else None
+         text = label + ": " + (equipped.getName() if equipped else "-")
+         color = COLOR_TEXT if equipped else COLOR_TEXT_DIM
+         equipSurf = equipFont.render(text, True, color)
+         self.screen.blit(equipSurf, (rect.x + 10, equipY))
+         equipY += 16
+
+      dividerY = equipY + 6
+      pygame.draw.line(self.screen, COLOR_BORDER, (rect.x + 10, dividerY), (rect.right - 10, dividerY))
+
       if not self.inventoryButtons:
-         emptySurf = getFont(13).render("Nothing carried.", True, COLOR_TEXT_DIM)
-         self.screen.blit(emptySurf, (rect.x + 10, rect.y + 40))
+         emptySurf = getFont(13).render("Nothing else carried.", True, COLOR_TEXT_DIM)
+         self.screen.blit(emptySurf, (rect.x + 10, self._inventoryItemsStartY()))
          return
 
       nameFont = getFont(13)
+      nameRect = pygame.Rect(rect.x + 10, 0, self.inventoryNameWidth, 20)
+      previousClip = self.screen.get_clip()
       for item, useButton, dropButton in self.inventoryButtons:
-         nameSurf = nameFont.render(item.getName(), True, COLOR_TEXT)
+         # Quest items (still awaiting turn-in) are called out in accent
+         # color with who they're for, so carrying one reads as an open
+         # task rather than just another line in the pack.
+         requestor = item.npcRequestor
+         pendingQuest = requestor is not None and requestor.getQuestFulfilledStatus() == "Pending"
+         nameText = item.getName() + ("  -> " + requestor.getName() if pendingQuest else "")
+         nameColor = COLOR_ACCENT if pendingQuest else COLOR_TEXT
+
+         nameSurf = nameFont.render(nameText, True, nameColor)
          nameY = useButton.rect.y + (useButton.rect.height - nameSurf.get_height()) // 2
+         nameRect.y = nameY
+         self.screen.set_clip(nameRect)
          self.screen.blit(nameSurf, (rect.x + 10, nameY))
+         self.screen.set_clip(previousClip)
+
          useButton.draw(self.screen)
          dropButton.draw(self.screen)
 
    def drawDirectionPane(self):
       rect = self.directionPaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
-      pygame.draw.rect(self.screen, COLOR_TEXT, rect, width=1, border_radius=4)
+      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1, border_radius=4)
       titleSurf = getFont(14, bold=True).render("Move", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
       for button in self.directionButtons.values():
@@ -908,6 +1003,8 @@ class ChainsOfIvyPygameApp:
             self.handleEvent(event)
          self.commandInput.update(dt)
          self.modalStack.update(dt)
+         self.statsHighlightTimer = max(0.0, self.statsHighlightTimer - dt)
+         self.inventoryHighlightTimer = max(0.0, self.inventoryHighlightTimer - dt)
          self.draw()
       pygame.quit()
 
