@@ -49,12 +49,22 @@ def getFont(size, bold=False, serif=False):
    return _fontCache[key]
 
 
+def wrapParagraphs(text, font, maxWidth):
+   """Wraps text (which may contain literal newlines as paragraph breaks)
+   to maxWidth pixels, returning the flat list of wrapped lines. Shared by
+   drawWrappedText/drawTopAlignedText, and usable standalone by callers
+   that need the line count before deciding how much space to give the
+   text - e.g. sizing a scrim behind it."""
+   lines = []
+   for rawLine in text.split("\n"):
+      lines.extend(wrapText(rawLine, font, maxWidth))
+   return lines
+
+
 def drawWrappedText(surface, text, rect, font, color, align="center"):
    """Draws word-wrapped, vertically-centered text inside rect. align is
    "center" or "left" for horizontal alignment of each line."""
-   lines = []
-   for rawLine in text.split("\n"):
-      lines.extend(wrapText(rawLine, font, rect.width))
+   lines = wrapParagraphs(text, font, rect.width)
 
    lineHeight = font.get_linesize()
    y = rect.y + max(0, (rect.height - len(lines) * lineHeight) // 2)
@@ -65,14 +75,14 @@ def drawWrappedText(surface, text, rect, font, color, align="center"):
       y += lineHeight
 
 
-def drawTopAlignedText(surface, text, rect, font, color, align="left"):
+def drawTopAlignedText(surface, text, rect, font, color, align="left", shadowColor=None):
    """Draws word-wrapped text starting at the top of rect, clipped to it,
    rather than drawWrappedText's vertical centering - for prose that
    should begin right below a heading/image rather than float in the
-   middle of its box. Overflow is clipped, not scrolled."""
-   lines = []
-   for rawLine in text.split("\n"):
-      lines.extend(wrapText(rawLine, font, rect.width))
+   middle of its box. Overflow is clipped, not scrolled. shadowColor, when
+   given, draws each line offset by (1, 1) first - for text overlaid on a
+   photo, where a plain flat color can vanish into a bright patch of it."""
+   lines = wrapParagraphs(text, font, rect.width)
 
    previousClip = surface.get_clip()
    surface.set_clip(rect)
@@ -80,8 +90,11 @@ def drawTopAlignedText(surface, text, rect, font, color, align="left"):
    y = rect.y
    for line in lines:
       if line:
+         x = rect.x + (rect.width - font.size(line)[0]) // 2 if align == "center" else rect.x
+         if shadowColor is not None:
+            shadowSurf = font.render(line, True, shadowColor)
+            surface.blit(shadowSurf, (x + 1, y + 1))
          textSurf = font.render(line, True, color)
-         x = rect.x + (rect.width - textSurf.get_width()) // 2 if align == "center" else rect.x
          surface.blit(textSurf, (x, y))
       y += lineHeight
    surface.set_clip(previousClip)

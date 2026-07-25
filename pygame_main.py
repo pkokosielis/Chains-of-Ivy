@@ -35,6 +35,7 @@ from pygame_widgets import (
    COLOR_BUTTON_DISABLED,
    drawWrappedText,
    drawTopAlignedText,
+   wrapParagraphs,
    getFont,
 )
 
@@ -88,6 +89,56 @@ def loadScaledImage(path, maxWidth, maxHeight):
    scaled = pygame.transform.smoothscale(image, scaledSize)
    _imageCache[cacheKey] = scaled
    return scaled
+
+
+def loadCoverImage(path, targetWidth, targetHeight):
+   """Loads an image scaled to fill exactly targetWidth x targetHeight,
+   cropping the overflow (rather than loadScaledImage's "fit inside and
+   letterbox") - for the Scene pane's full-bleed background, where the
+   image should reach every edge of the panel. Returns None on a missing
+   or undecodable file, same as loadScaledImage."""
+   cacheKey = ("cover", path, targetWidth, targetHeight)
+   if cacheKey in _imageCache:
+      return _imageCache[cacheKey]
+
+   try:
+      image = pygame.image.load(path).convert_alpha()
+   except (pygame.error, FileNotFoundError):
+      _imageCache[cacheKey] = None
+      return None
+
+   width, height = image.get_size()
+   scale = max(targetWidth / width, targetHeight / height)
+   scaledSize = (max(1, int(width * scale)), max(1, int(height * scale)))
+   scaled = pygame.transform.smoothscale(image, scaledSize)
+
+   cropRect = pygame.Rect(0, 0, targetWidth, targetHeight)
+   cropRect.center = scaled.get_rect().center
+   cropped = scaled.subsurface(cropRect).copy()
+   _imageCache[cacheKey] = cropped
+   return cropped
+
+
+_scrimCache = {}
+
+
+def getBottomScrim(width, height, maxAlpha=210):
+   """A cached vertical gradient (transparent top -> dark bottom) sized to
+   sit behind the Scene pane's title/description when they're overlaid on
+   room art, so the text stays legible regardless of what's in the image
+   underneath. Built once per distinct size and reused - it's an
+   SRCALPHA surface where every row's alpha is set individually, not
+   something to redo every frame."""
+   cacheKey = (width, height, maxAlpha)
+   if cacheKey in _scrimCache:
+      return _scrimCache[cacheKey]
+
+   scrim = pygame.Surface((width, height), pygame.SRCALPHA)
+   for y in range(height):
+      alpha = int(maxAlpha * (y / max(1, height - 1)))
+      pygame.draw.line(scrim, (0, 0, 0, alpha), (0, y), (width, y))
+   _scrimCache[cacheKey] = scrim
+   return scrim
 
 
 # (action char, Room attribute name, blockedDirections label, button label)
@@ -380,9 +431,12 @@ class ChainsOfIvyPygameApp:
 
       # Left column: the Scene pane (room title + art + description) always
       # has content, unlike the old image-only pane that sat empty for
-      # every room without art. Log and command input beneath it.
-      self.scenePaneRect = pygame.Rect(20, 60, 650, 380)
-      self.log = ScrollLog((20, 452, 650, 300))
+      # every room without art. It's the dominant panel now that room
+      # entry no longer dumps the description into the log too (see
+      # drawScenePane) - the log only needs to hold combat/event history,
+      # not be a second place to read where you are. Command input beneath.
+      self.scenePaneRect = pygame.Rect(20, 60, 650, 520)
+      self.log = ScrollLog((20, 592, 650, 160))
       iowSetViewer(self.log)
 
       self.commandInput = TextInput((20, 764, 650, 36), placeholder="What do you do?",
@@ -831,35 +885,71 @@ class ChainsOfIvyPygameApp:
       """The room title, art (when this room has any), and description -
       always has content, unlike the old image-only pane that sat empty
       for every room without art. The title is drawn here (not just
-      logged) so where you are never scrolls out of view."""
+      logged) so where you are never scrolls out of view.
+
+      When the room has art, the image fills the pane edge to edge and
+      title/description sit on a dark scrim over its bottom, so the image
+      is the point rather than a small illustration squeezed above the
+      text. Rooms without art (most of them, currently) fall back to a
+      plain surface with the text laid out top to bottom - there's
+      nothing to overlay text onto without an image."""
       rect = self.scenePaneRect
       pygame.draw.rect(self.screen, COLOR_SURFACE, rect)
-      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1)
       if not self.currentRoom:
+         pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1)
          return
 
+      title = self.currentRoom.getTitle()
+      description = self.currentRoom.description.strip()
+      imagePath = ROOM_IMAGES.get(self.currentRoom.getID())
+      image = loadCoverImage(imagePath, rect.width, rect.height) if imagePath else None
+
+      if image is not None:
+         self.screen.blit(image, rect.topleft)
+         self._drawSceneOverlay(rect, title, description)
+      else:
+         self._drawScenePlain(rect, title, description)
+
+      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1)
+
+   def _drawScenePlain(self, rect, title, description):
       padding = 12
       titleRect = pygame.Rect(rect.x + padding, rect.y + padding, rect.width - padding * 2, 26)
-      titleSurf = getFont(19, bold=True, serif=True).render(self.currentRoom.getTitle(), True, COLOR_TEXT)
-      previousClip = self.screen.get_clip()
-      self.screen.set_clip(titleRect)
-      self.screen.blit(titleSurf, (titleRect.x, titleRect.y))
-      self.screen.set_clip(previousClip)
+      drawTopAlignedText(self.screen, title, titleRect, getFont(19, bold=True, serif=True), COLOR_TEXT)
 
-      contentY = titleRect.bottom + 8
-      imagePath = ROOM_IMAGES.get(self.currentRoom.getID())
-      if imagePath:
-         image = loadScaledImage(imagePath, rect.width - padding * 2, 150)
-         if image is not None:
-            imageRect = image.get_rect()
-            imageRect.midtop = (rect.centerx, contentY)
-            self.screen.blit(image, imageRect)
-            contentY = imageRect.bottom + 10
+      descRect = pygame.Rect(rect.x + padding, titleRect.bottom + 8, rect.width - padding * 2,
+                              max(0, rect.bottom - titleRect.bottom - 8 - padding))
+      drawTopAlignedText(self.screen, description, descRect, getFont(15, serif=True), COLOR_TEXT)
 
-      descRect = pygame.Rect(rect.x + padding, contentY, rect.width - padding * 2,
-                              max(0, rect.bottom - contentY - padding))
-      drawTopAlignedText(self.screen, self.currentRoom.description.strip(), descRect,
-                          getFont(15, serif=True), COLOR_TEXT)
+   def _drawSceneOverlay(self, rect, title, description):
+      """Sizes the scrim to the description's actual wrapped line count
+      (capped at 65% of the pane's height) so a short description barely
+      dims the image and a long one never buries it - text beyond the cap
+      clips, the same overflow rule used elsewhere in this frontend,
+      rather than shrinking the image further to make room."""
+      padding, gap = 14, 6
+      titleFont = getFont(20, bold=True, serif=True)
+      descFont = getFont(15, serif=True)
+      textWidth = rect.width - padding * 2
+      titleHeight = titleFont.get_linesize()
+      lineHeight = descFont.get_linesize()
+      lineCount = len(wrapParagraphs(description, descFont, textWidth))
+
+      maxScrimHeight = int(rect.height * 0.65)
+      wantedHeight = padding * 2 + titleHeight + gap + lineCount * lineHeight
+      scrimHeight = min(maxScrimHeight, wantedHeight)
+
+      scrimRect = pygame.Rect(rect.x, rect.bottom - scrimHeight, rect.width, scrimHeight)
+      self.screen.blit(getBottomScrim(scrimRect.width, scrimRect.height), scrimRect.topleft)
+
+      titleRect = pygame.Rect(scrimRect.x + padding, scrimRect.y + padding, textWidth, titleHeight)
+      drawTopAlignedText(self.screen, title, titleRect, titleFont, COLOR_TEXT,
+                          shadowColor=COLOR_BACKGROUND)
+
+      descRect = pygame.Rect(scrimRect.x + padding, titleRect.bottom + gap, textWidth,
+                              max(0, scrimRect.bottom - padding - titleRect.bottom - gap))
+      drawTopAlignedText(self.screen, description, descRect, descFont, COLOR_TEXT,
+                          shadowColor=COLOR_BACKGROUND)
 
    def drawHerePane(self):
       """Lists NPCs, the storekeeper, monsters (with an HP bar), and items
