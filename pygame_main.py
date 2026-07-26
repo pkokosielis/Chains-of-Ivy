@@ -48,11 +48,6 @@ from createdRooms import *
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 820
 
-# How long the Stats bar / Inventory pane border flashes accent-colored
-# after "stats"/"inventory" is typed, pointing at the panel that already
-# has the answer instead of dumping the same numbers into the log again.
-HIGHLIGHT_PULSE_SECONDS = 0.6
-
 BANNER_IMAGE_PATH = ".images/game_banner.png"
 # Maps a Room's numeric ID to the art shown for it on the main screen.
 # Not every room has art yet; rooms missing from this dict simply show no
@@ -503,9 +498,6 @@ class ChainsOfIvyPygameApp:
       self.currentRoom = None
       self.player = None
 
-      self.statsHighlightTimer = 0.0
-      self.inventoryHighlightTimer = 0.0
-
       self.modalStack = ModalStack()
 
       # Left column: the Scene pane (room title + art + description) always
@@ -513,13 +505,13 @@ class ChainsOfIvyPygameApp:
       # every room without art. It's the dominant panel now that room
       # entry no longer dumps the description into the log too (see
       # drawScenePane) - the log only needs to hold combat/event history,
-      # not be a second place to read where you are. Command input beneath.
+      # not be a second place to read where you are. Every action is
+      # reachable by mouse (Move/Here/Inventory/Menu), so there's no typed
+      # command input to make room for below it - the log runs to the
+      # bottom of the column instead.
       self.scenePaneRect = pygame.Rect(20, 60, 650, 520)
-      self.log = ScrollLog((20, 592, 650, 160))
+      self.log = ScrollLog((20, 592, 650, 208))
       iowSetViewer(self.log)
-
-      self.commandInput = TextInput((20, 764, 650, 36), placeholder="What do you do?",
-                                     on_submit=self.handleCommand)
 
       self.directionButtons = {}
       self._buildDirectionButtons()
@@ -579,33 +571,17 @@ class ChainsOfIvyPygameApp:
       self.refreshUI()
 
    def handleCommand(self, rawAction):
+      """Dispatches an action string from a button click - Here pane's
+      Talk/Attack/Take (the only callers now that every action has a
+      mouse path and there's no text input left to type anything else
+      into). Save/Load/New Game/Quit go straight from the Menu to their
+      own confirm* methods; Use/Drop/Buy go straight from their panel's
+      button to onUseItem/confirmDrop/confirmBuy. Both bypass this
+      dispatcher entirely, same as before it lost its typed-command role."""
       action = rawAction.strip()
       if not action:
          return
       iowPrint("\n>>: " + action)
-
-      if action == "quit":
-         self.confirmExit()
-         return
-
-      if action in ("restore", "load"):
-         self.confirmLoad()
-         return
-
-      if action == "save":
-         self.confirmSaveAs()
-         return
-
-      if action == "stats":
-         # Stats are already always visible in the top bar; pulse it
-         # instead of dumping the same numbers into the log again.
-         self.statsHighlightTimer = HIGHLIGHT_PULSE_SECONDS
-         return
-
-      if action == "inventory":
-         # Same reasoning: the Inventory pane already shows this.
-         self.inventoryHighlightTimer = HIGHLIGHT_PULSE_SECONDS
-         return
 
       if action == "talk":
          pendingNpc = self.getPendingQuestNpc()
@@ -619,20 +595,6 @@ class ChainsOfIvyPygameApp:
             self.openStore(self.currentRoom.storeKeeper)
             return
 
-      if action[:5] == "drop ":
-         item = self.player.getItemFromDescription(action[5:])
-         if item is not None:
-            self.confirmDrop(item)
-            return
-
-      if action[:4] == "buy ":
-         storeKeeper = self.currentRoom.storeKeeper if self.currentRoom else None
-         if storeKeeper is not None:
-            item = storeKeeper.existsItem(action[4:])
-            if item is not None and self.player.getGold() >= item.getItemValue():
-               self.confirmBuy(storeKeeper, item)
-               return
-
       self.performAction(action)
 
    def performAction(self, action):
@@ -645,7 +607,6 @@ class ChainsOfIvyPygameApp:
 
    def finishStartup(self):
       self.refreshUI()
-      self.commandInput.focused = True
 
    def handleStartChoice(self, choice):
       if choice == "start-restore":
@@ -956,8 +917,6 @@ class ChainsOfIvyPygameApp:
          + "   Gold " + str(player.gold) + "   AC " + str(player.getArmorClass())
       )
       statsRect = pygame.Rect(20, 4, self.adminMenu.toggleButton.rect.x - 30, 52)
-      if self.statsHighlightTimer > 0:
-         pygame.draw.rect(self.screen, COLOR_ACCENT, statsRect.inflate(12, 8), width=2, border_radius=4)
 
       # Name reads as a heading (serif, matching the Scene pane's room
       # title) on its own line above the numbers, rather than folded into
@@ -1085,9 +1044,7 @@ class ChainsOfIvyPygameApp:
    def drawInventoryPane(self):
       rect = self.inventoryPaneRect
       pygame.draw.rect(self.screen, COLOR_BACKGROUND, rect)
-      highlighted = self.inventoryHighlightTimer > 0
-      borderColor = COLOR_ACCENT if highlighted else COLOR_BORDER
-      pygame.draw.rect(self.screen, borderColor, rect, width=(2 if highlighted else 1), border_radius=4)
+      pygame.draw.rect(self.screen, COLOR_BORDER, rect, width=1, border_radius=4)
       titleSurf = getFont(14, bold=True).render("Inventory", True, COLOR_TEXT)
       self.screen.blit(titleSurf, (rect.x + 10, rect.y + 8))
 
@@ -1149,7 +1106,6 @@ class ChainsOfIvyPygameApp:
       self.drawStatsBar()
       self.drawScenePane()
       self.log.draw(self.screen)
-      self.commandInput.draw(self.screen)
       self.drawHerePane()
       self.drawInventoryPane()
       self.drawDirectionPane()
@@ -1172,7 +1128,6 @@ class ChainsOfIvyPygameApp:
       if self.adminMenu.handle_event(event):
          return
 
-      self.commandInput.handle_event(event)
       self.log.handle_event(event)
       for button in self.directionButtons.values():
          button.handle_event(event)
@@ -1187,10 +1142,7 @@ class ChainsOfIvyPygameApp:
          dt = self.clock.tick(60) / 1000.0
          for event in pygame.event.get():
             self.handleEvent(event)
-         self.commandInput.update(dt)
          self.modalStack.update(dt)
-         self.statsHighlightTimer = max(0.0, self.statsHighlightTimer - dt)
-         self.inventoryHighlightTimer = max(0.0, self.inventoryHighlightTimer - dt)
          self.draw()
       pygame.quit()
 

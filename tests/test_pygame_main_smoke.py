@@ -2,11 +2,16 @@
 
 Pygame has no OS-level input simulator like Textual's Pilot, so these
 drive the app directly at the Python-call level instead: calling
-app.handleCommand(...)/app.onDirectionClick(...) the same way the real
-event loop would, and invoking a dialog's button on_click callbacks
-directly rather than synthesizing real mouse clicks. Runs against a dummy
-SDL video driver so no real window is needed - see pygame_main.py and
-pygame_widgets.py for the frontend these exercise.
+app.onDirectionClick(...)/_clickMenuItem(...) and invoking a dialog's or
+panel row's button on_click callbacks directly, the same actions a real
+click would trigger. There's no typed-command entry point left to
+simulate - every action reaches the app through a button, the Menu, or a
+Here/Inventory panel row - so app.handleCommand(...) is only still
+useful directly for its three remaining real callers (Here pane's
+Talk/Attack/Take) and as a way to poke the generic engine-dispatch
+fallback with an arbitrary string. Runs against a dummy SDL video driver
+so no real window is needed - see pygame_main.py and pygame_widgets.py
+for the frontend these exercise.
 """
 import os
 
@@ -45,6 +50,12 @@ def _play(commands):
    for command in commands:
       app.handleCommand(command)
    return app, app.log.getText()
+
+
+def _clickMenuItem(app, label):
+   app.adminMenu.toggleButton.on_click()
+   button = next(b for b in app.adminMenu.itemButtons if b.label == label)
+   button.on_click()
 
 
 def _build_store_room():
@@ -215,15 +226,18 @@ def test_pygame_inventory_drop_button_confirmed_removes_item():
 
 # -- Save / restore / load / quit -------------------------------------------
 #
-# Save Game and Load Game are the only save mechanic - there's no separate
-# unnamed quick-save slot. "save" always prompts for a name (pre-filled
-# with an auto-incrementing "saved-N" default so Enter alone works), and
-# both "restore" and "load" open the same named-save picker.
+# Save Game and Load Game (the Menu's only two save-related items - see
+# test_pygame_admin_menu_has_no_separate_restore_item) are the only save
+# mechanic; there's no separate unnamed quick-save slot. Save always
+# prompts for a name (pre-filled with an auto-incrementing "saved-N"
+# default so Enter alone works). The engine still recognizes "restore"
+# and "load" as separate command strings, but nothing in the UI sends
+# either one anymore - Load Game covers both.
 
 def test_pygame_save_shows_prefilled_name_dialog_and_cancel_skips_it():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("save")
+   _clickMenuItem(app, "Save Game")
    top = app.modalStack.top
    assert isinstance(top, SaveNameScreen)
    assert top.nameInput.value == "saved-1"
@@ -237,7 +251,7 @@ def test_pygame_save_confirmed_writes_named_file(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("save")
+   _clickMenuItem(app, "Save Game")
    app.modalStack.top.widgets[1].on_click()  # Save, using the prefilled name
    assert (tmp_path / "saves" / "saved-1.dat").exists()
 
@@ -247,41 +261,22 @@ def test_pygame_save_default_name_increments_and_ignores_custom_names(tmp_path, 
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
 
-   app.handleCommand("save")
+   _clickMenuItem(app, "Save Game")
    app.modalStack.top.widgets[1].on_click()  # -> saved-1
-   app.handleCommand("save")
+   _clickMenuItem(app, "Save Game")
    assert app.modalStack.top.nameInput.value == "saved-2"
    app.modalStack.top.widgets[1].on_click()  # -> saved-2
 
    app.nextAction.doNamedSave(app.currentRoom, app.player, "before-boss")
 
-   app.handleCommand("save")
+   _clickMenuItem(app, "Save Game")
    assert app.modalStack.top.nameInput.value == "saved-3"
-
-
-def test_pygame_restore_and_load_commands_both_open_the_named_picker(tmp_path, monkeypatch):
-   monkeypatch.chdir(tmp_path)
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   app.handleCommand("save")
-   app.modalStack.top.widgets[1].on_click()  # -> saved-1
-
-   app.onDirectionClick("d")
-   assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
-
-   app.handleCommand("restore")
-   assert isinstance(app.modalStack.top, LoadPickerScreen)
-   app.modalStack.top.widgets[0].on_click()  # pick "saved-1"
-   assert isinstance(app.modalStack.top, ConfirmScreen)
-   app.modalStack.top.widgets[0].on_click()  # Yes
-
-   assert app.currentRoom.getTitle() == "Chorley Park Study"
 
 
 def test_pygame_quit_shows_exit_dialog_and_cancel_resumes_play():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    assert isinstance(app.modalStack.top, ExitScreen)
    app.modalStack.top.widgets[2].on_click()  # Cancel
    assert not app.modalStack.active
@@ -291,22 +286,9 @@ def test_pygame_quit_shows_exit_dialog_and_cancel_resumes_play():
 def test_pygame_quit_exit_without_saving_exits_app():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    app.modalStack.top.widgets[1].on_click()  # Exit without saving
    assert app.running is False
-
-
-def _clickMenuItem(app, label):
-   app.adminMenu.toggleButton.on_click()
-   button = next(b for b in app.adminMenu.itemButtons if b.label == label)
-   button.on_click()
-
-
-def test_pygame_admin_menu_quit_opens_same_exit_dialog_as_typed_quit():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   _clickMenuItem(app, "Quit")
-   assert isinstance(app.modalStack.top, ExitScreen)
 
 
 def test_pygame_admin_menu_toggle_opens_and_closes():
@@ -390,7 +372,7 @@ def test_pygame_quit_save_game_prompts_name_then_continue_keeps_playing(tmp_path
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
 
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    app.modalStack.top.widgets[0].on_click()  # Save Game
    assert isinstance(app.modalStack.top, SaveNameScreen)
 
@@ -408,7 +390,7 @@ def test_pygame_quit_save_game_then_exit_stops_app(tmp_path, monkeypatch):
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
 
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    app.modalStack.top.widgets[0].on_click()  # Save Game
    app.modalStack.top._trySubmit("before-the-boss")
    app.modalStack.top.widgets[1].on_click()  # Exit
@@ -421,7 +403,7 @@ def test_pygame_save_name_screen_rejects_blank_name(tmp_path, monkeypatch):
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
 
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    app.modalStack.top.widgets[0].on_click()
    saveScreen = app.modalStack.top
    assert isinstance(saveScreen, SaveNameScreen)
@@ -431,16 +413,16 @@ def test_pygame_save_name_screen_rejects_blank_name(tmp_path, monkeypatch):
    assert saveScreen.showError is True
 
 
-def test_pygame_load_command_with_no_saves_shows_empty_picker(tmp_path, monkeypatch):
+def test_pygame_load_with_no_saves_shows_empty_picker(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("load")
+   _clickMenuItem(app, "Load Game")
    assert isinstance(app.modalStack.top, LoadPickerScreen)
    assert app.modalStack.top.noSavesRect is not None
 
 
-def test_pygame_load_command_with_corrupted_save_reports_error(tmp_path, monkeypatch):
+def test_pygame_load_with_corrupted_save_reports_error(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    savesDir = tmp_path / "saves"
    savesDir.mkdir()
@@ -448,7 +430,7 @@ def test_pygame_load_command_with_corrupted_save_reports_error(tmp_path, monkeyp
 
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
-   app.handleCommand("load")
+   _clickMenuItem(app, "Load Game")
    assert isinstance(app.modalStack.top, LoadPickerScreen)
    app.modalStack.top.widgets[0].on_click()  # pick "Broken"
    assert isinstance(app.modalStack.top, ConfirmScreen)
@@ -458,12 +440,12 @@ def test_pygame_load_command_with_corrupted_save_reports_error(tmp_path, monkeyp
    assert "could not be loaded" in app.log.getText()
 
 
-def test_pygame_load_command_picks_and_restores_named_save(tmp_path, monkeypatch):
+def test_pygame_load_picks_and_restores_named_save(tmp_path, monkeypatch):
    monkeypatch.chdir(tmp_path)
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
 
-   app.handleCommand("quit")
+   _clickMenuItem(app, "Quit")
    app.modalStack.top.widgets[0].on_click()
    app.modalStack.top._trySubmit("Study Snapshot")
    app.modalStack.top.widgets[0].on_click()  # Continue
@@ -471,7 +453,7 @@ def test_pygame_load_command_picks_and_restores_named_save(tmp_path, monkeypatch
    app.onDirectionClick("d")
    assert app.currentRoom.getTitle() == "Chorley Park Library Hall"
 
-   app.handleCommand("load")
+   _clickMenuItem(app, "Load Game")
    assert isinstance(app.modalStack.top, LoadPickerScreen)
    app.modalStack.top.widgets[0].on_click()
    assert isinstance(app.modalStack.top, ConfirmScreen)
@@ -635,6 +617,28 @@ def test_pygame_store_dialog_buy_button_disabled_when_unaffordable():
    assert buyButton.enabled is False
 
 
+def test_pygame_store_dialog_buy_button_confirm_no_cancels_purchase():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   app.currentRoom = room
+   app.player.incrementGold(100)
+
+   app.handleCommand("talk")
+   store = app.modalStack.top
+   _item, buyButton = store.itemRows[0]
+   buyButton.on_click()
+
+   assert isinstance(app.modalStack.top, ConfirmScreen)
+   app.modalStack.top.widgets[1].on_click()  # No
+
+   assert "decide not to buy" in app.log.getText()
+   assert app.player.getGold() == 100
+   assert not any(i.getName() == "Test Tonic" for i in app.player.inventory)
+   # Declining leaves the store dialog open too, same as confirming does.
+   assert app.modalStack.top is store
+
+
 def test_pygame_store_dialog_close_button_dismisses():
    app = ChainsOfIvyPygameApp()
    _startNewGame(app)
@@ -645,85 +649,6 @@ def test_pygame_store_dialog_close_button_dismisses():
    closeButton = app.modalStack.top.widgets[-1]
    closeButton.on_click()
 
-   assert not app.modalStack.active
-
-
-def test_pygame_drop_shows_dialog_and_no_cancels():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   app.handleCommand("take all")
-
-   app.handleCommand("drop Gold pocket watch")
-   assert isinstance(app.modalStack.top, ConfirmScreen)
-   app.modalStack.top.widgets[1].on_click()  # No
-
-   assert "hold onto the Gold pocket watch" in app.log.getText()
-   assert any(item.getName() == "Gold pocket watch" for item in app.player.inventory)
-
-
-def test_pygame_drop_confirmed_removes_item():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   app.handleCommand("take all")
-
-   app.handleCommand("drop Gold pocket watch")
-   app.modalStack.top.widgets[0].on_click()  # Yes
-
-   assert not any(item.getName() == "Gold pocket watch" for item in app.player.inventory)
-
-
-def test_pygame_drop_unknown_item_skips_dialog():
-   app, output = _play(["drop nonexistent item"])
-   assert "I don't have a nonexistent item" in output
-
-
-def test_pygame_buy_shows_dialog_and_no_cancels():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   room, storeKeeper, item = _build_store_room()
-   app.currentRoom = room
-   app.player.incrementGold(100)
-
-   app.handleCommand("buy Test Tonic")
-   assert isinstance(app.modalStack.top, ConfirmScreen)
-   app.modalStack.top.widgets[1].on_click()  # No
-
-   assert "decide not to buy" in app.log.getText()
-   assert app.player.getGold() == 100
-   assert not any(i.getName() == "Test Tonic" for i in app.player.inventory)
-
-
-def test_pygame_buy_confirmed_completes_purchase():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   room, storeKeeper, item = _build_store_room()
-   app.currentRoom = room
-   app.player.incrementGold(100)
-
-   app.handleCommand("buy Test Tonic")
-   app.modalStack.top.widgets[0].on_click()  # Yes
-
-   assert app.player.getGold() == 90
-   assert any(i.getName() == "Test Tonic" for i in app.player.inventory)
-
-
-def test_pygame_buy_unknown_item_skips_dialog():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   room, storeKeeper, item = _build_store_room()
-   app.currentRoom = room
-
-   app.handleCommand("buy nonexistent item")
-   assert "There is no nonexistent item available to buy!" in app.log.getText()
-
-
-def test_pygame_buy_insufficient_gold_skips_dialog():
-   app = ChainsOfIvyPygameApp()
-   _startNewGame(app)
-   room, storeKeeper, item = _build_store_room()
-   app.currentRoom = room
-
-   app.handleCommand("buy Test Tonic")
    assert not app.modalStack.active
 
 
