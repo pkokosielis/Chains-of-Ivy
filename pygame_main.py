@@ -8,6 +8,7 @@ resolution limits. The engine (engine/*.py) is untouched and
 frontend-agnostic: everything routes through iowPrint/iowWrapPrint,
 which just needs an object exposing write(msg) - here, a ScrollLog.
 """
+import os
 import re
 import sys
 
@@ -49,14 +50,24 @@ WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 820
 
 BANNER_IMAGE_PATH = ".images/game_banner.png"
-# Maps a Room's numeric ID to the art shown for it on the main screen.
-# Not every room has art yet; rooms missing from this dict simply show no
-# image. Lives here, not in the engine, so engine/Room.py stays
-# frontend-agnostic.
-ROOM_IMAGES = {
-   1: ".images/room1.png",
-   2: ".images/room2.png",
-}
+ROOM_IMAGE_DIR = ".images"
+
+_roomImagePathCache = {}
+
+
+def roomImagePath(roomID):
+   """The art for a room, by convention: .images/room<ID>.png if that file
+   exists, else None. No registry to keep in sync with the art folder -
+   drop a correctly-named file in and it's picked up the next time this
+   process looks. Discovered lazily and cached per room ID, so a room's
+   disk is only checked once per game instance rather than on every
+   draw() call; rooms without art simply show no image. Lives here, not
+   in the engine, so engine/Room.py stays frontend-agnostic."""
+   if roomID not in _roomImagePathCache:
+      path = os.path.join(ROOM_IMAGE_DIR, "room" + str(roomID) + ".png")
+      _roomImagePathCache[roomID] = path if os.path.isfile(path) else None
+   return _roomImagePathCache[roomID]
+
 
 _imageCache = {}
 
@@ -949,7 +960,7 @@ class ChainsOfIvyPygameApp:
 
       title = self.currentRoom.getTitle()
       description = self.currentRoom.description.strip()
-      imagePath = ROOM_IMAGES.get(self.currentRoom.getID())
+      imagePath = roomImagePath(self.currentRoom.getID())
       image = loadCoverImage(imagePath, rect.width, rect.height) if imagePath else None
 
       if image is not None:
