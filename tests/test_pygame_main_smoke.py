@@ -29,6 +29,7 @@ from pygame_main import (
    PostSaveScreen,
    SaveNameScreen,
    StartScreen,
+   StoreScreen,
 )
 
 
@@ -570,6 +571,81 @@ def test_pygame_talk_quest_turn_in_confirmed_completes_quest():
 def test_pygame_talk_without_pending_quest_skips_dialog():
    app, output = _play(["talk"])
    assert "mutter to yourself bitterly" in output
+
+
+def test_pygame_talk_to_storekeeper_opens_store_dialog():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   app.currentRoom = room
+
+   app.handleCommand("talk")
+
+   assert isinstance(app.modalStack.top, StoreScreen)
+   assert app.modalStack.top.itemRows[0][0] is item
+
+
+def test_pygame_talk_prefers_npc_over_storekeeper_when_both_present():
+   """Regression guard: doAdminAction's own talk handling checks room.npc
+   before room.storeKeeper, so a room with both should still greet its
+   NPC via the ordinary log-based talk, not open the store dialog."""
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   room.addNPCtoRoom(NPC("A quiet clerk", 0, 0))
+   app.currentRoom = room
+
+   app.handleCommand("talk")
+
+   assert not app.modalStack.active
+   assert "silence is deafening" in app.log.getText()
+
+
+def test_pygame_store_dialog_buy_button_completes_purchase_and_stays_open():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   app.currentRoom = room
+   app.player.incrementGold(100)
+
+   app.handleCommand("talk")
+   store = app.modalStack.top
+   _item, buyButton = store.itemRows[0]
+   buyButton.on_click()
+
+   assert isinstance(app.modalStack.top, ConfirmScreen)
+   app.modalStack.top.widgets[0].on_click()  # Yes
+
+   assert app.player.getGold() == 90
+   assert any(i.getName() == "Test Tonic" for i in app.player.inventory)
+   # The store dialog is back on top (not fully closed) so more can be bought.
+   assert app.modalStack.top is store
+
+
+def test_pygame_store_dialog_buy_button_disabled_when_unaffordable():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   app.currentRoom = room  # no gold granted; the item costs 10
+
+   app.handleCommand("talk")
+   app.draw()  # StoreScreen.draw() recomputes each Buy button's enabled state
+
+   _item, buyButton = app.modalStack.top.itemRows[0]
+   assert buyButton.enabled is False
+
+
+def test_pygame_store_dialog_close_button_dismisses():
+   app = ChainsOfIvyPygameApp()
+   _startNewGame(app)
+   room, storeKeeper, item = _build_store_room()
+   app.currentRoom = room
+
+   app.handleCommand("talk")
+   closeButton = app.modalStack.top.widgets[-1]
+   closeButton.on_click()
+
+   assert not app.modalStack.active
 
 
 def test_pygame_drop_shows_dialog_and_no_cancels():

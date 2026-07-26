@@ -411,6 +411,85 @@ class LoadPickerScreen(Modal):
                           COLOR_TEXT_DIM, align="left")
 
 
+class StoreScreen(Modal):
+   """Storekeeper dialog: welcome message, store name, current gold, and
+   every item for sale with a Buy button - opened by talking to a room's
+   storekeeper, replacing the old behavior of dumping the price list into
+   the log and requiring "buy <item>" to be typed blind. Stays open
+   across purchases (StoreKeeper.sellItem() doesn't remove the item from
+   stock, so it's still there to buy again) rather than closing after
+   one purchase. Buy buttons disable themselves - and their price dims -
+   the moment gold on hand can't cover them; both are recomputed from the
+   live Character each frame, so a purchase made via the nested Confirm
+   dialog is reflected the instant it closes."""
+
+   ROW_HEIGHT = 34
+   ROW_GAP = 8
+   MAX_VISIBLE_ROWS = 6
+
+   def __init__(self, storeKeeper, character, on_buy):
+      self.storeKeeper = storeKeeper
+      self.character = character
+      self.on_buy = on_buy
+
+      width, padding = 480, 20
+      welcomeFont = getFont(14, serif=True)
+      welcomeLines = wrapParagraphs(storeKeeper.getWelcomeMessage(), welcomeFont, width - padding * 2)
+      welcomeHeight = max(1, len(welcomeLines)) * welcomeFont.get_linesize()
+      storeLineHeight = getFont(12).get_linesize()
+      headerHeight = 16 + welcomeHeight + 8 + storeLineHeight + 14
+
+      items = storeKeeper.itemsToSell
+      visibleCount = max(1, min(len(items), self.MAX_VISIBLE_ROWS))
+      height = headerHeight + visibleCount * (self.ROW_HEIGHT + self.ROW_GAP) + 60
+      rect = centeredRect(width, height)
+      super().__init__(rect)
+
+      self.welcomeRect = pygame.Rect(rect.x + padding, rect.y + 16, width - padding * 2, welcomeHeight)
+      self.storeLineRect = pygame.Rect(rect.x + padding, self.welcomeRect.bottom + 8,
+                                        width - padding * 2, storeLineHeight)
+
+      y = self.storeLineRect.bottom + 14
+      buyWidth = 80
+      self.itemRows = []
+      for item in items[:self.MAX_VISIBLE_ROWS]:
+         buyButton = Button((rect.right - padding - buyWidth, y, buyWidth, self.ROW_HEIGHT), "Buy",
+                             on_click=lambda it=item: self.on_buy(it))
+         self.widgets.append(buyButton)
+         self.itemRows.append((item, buyButton))
+         y += self.ROW_HEIGHT + self.ROW_GAP
+
+      closeY = rect.bottom - 50
+      self.widgets.append(Button((rect.x + padding, closeY, width - padding * 2, 40), "Close",
+                                  on_click=lambda: self.dismiss(None)))
+
+   def on_escape(self):
+      self.dismiss(None)
+      return True
+
+   def draw(self, surface):
+      for item, buyButton in self.itemRows:
+         buyButton.enabled = self.character.getGold() >= item.getItemValue()
+
+      super().draw(surface)
+
+      drawTopAlignedText(surface, self.storeKeeper.getWelcomeMessage(), self.welcomeRect,
+                          getFont(14, serif=True), COLOR_TEXT)
+
+      storeLine = (self.storeKeeper.getStoreName() + "   -   Your gold: "
+                   + str(self.character.getGold()))
+      storeLineSurf = getFont(12).render(storeLine, True, COLOR_TEXT_DIM)
+      surface.blit(storeLineSurf, self.storeLineRect.topleft)
+
+      priceFont = getFont(13)
+      for item, buyButton in self.itemRows:
+         label = item.getName() + "   [" + str(item.getItemValue()) + " gold]"
+         color = COLOR_TEXT if buyButton.enabled else COLOR_TEXT_DIM
+         labelSurf = priceFont.render(label, True, color)
+         labelY = buyButton.rect.y + (buyButton.rect.height - labelSurf.get_height()) // 2
+         surface.blit(labelSurf, (self.rect.x + 20, labelY))
+
+
 class ChainsOfIvyPygameApp:
 
    def __init__(self):
@@ -532,6 +611,12 @@ class ChainsOfIvyPygameApp:
          pendingNpc = self.getPendingQuestNpc()
          if pendingNpc is not None:
             self.confirmTalk(pendingNpc)
+            return
+         # Mirrors doAdminAction's own npc-before-storekeeper precedence:
+         # a room with both would still greet its NPC(s) via the normal
+         # log-based talk, same as before this dialog existed.
+         if self.currentRoom and self.currentRoom.storeKeeper and not self.currentRoom.npc:
+            self.openStore(self.currentRoom.storeKeeper)
             return
 
       if action[:5] == "drop ":
@@ -762,6 +847,10 @@ class ChainsOfIvyPygameApp:
       self.modalStack.push(
          ConfirmScreen("Buy the " + item.getName() + " for " + str(item.getItemValue()) + " gold?"),
          handle_response)
+
+   def openStore(self, storeKeeper):
+      self.modalStack.push(
+         StoreScreen(storeKeeper, self.player, lambda item: self.confirmBuy(storeKeeper, item)))
 
    def refreshUI(self):
       self.refreshDirections()
