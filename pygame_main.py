@@ -49,14 +49,14 @@ from createdRooms import *
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 820
 
-BANNER_IMAGE_PATH = ".images/game_banner.png"
+BANNER_IMAGE_PATH = ".images/game_banner.webp"
 ROOM_IMAGE_DIR = ".images"
 
 _roomImagePathCache = {}
 
 
 def roomImagePath(roomID):
-   """The art for a room, by convention: .images/room<ID>.png if that file
+   """The art for a room, by convention: .images/room<ID>.webp if that file
    exists, else None. No registry to keep in sync with the art folder -
    drop a correctly-named file in and it's picked up the next time this
    process looks. Discovered lazily and cached per room ID, so a room's
@@ -64,7 +64,7 @@ def roomImagePath(roomID):
    draw() call; rooms without art simply show no image. Lives here, not
    in the engine, so engine/Room.py stays frontend-agnostic."""
    if roomID not in _roomImagePathCache:
-      path = os.path.join(ROOM_IMAGE_DIR, "room" + str(roomID) + ".png")
+      path = os.path.join(ROOM_IMAGE_DIR, "room" + str(roomID) + ".webp")
       _roomImagePathCache[roomID] = path if os.path.isfile(path) else None
    return _roomImagePathCache[roomID]
 
@@ -334,7 +334,7 @@ class StartScreen(Modal):
 
    Reused both at app startup and whenever the player dies, with the
    banner text swapped to fit the occasion. The launch screen's default
-   banner renders .images/game_banner.png as a real image when it can be
+   banner renders .images/game_banner.webp as a real image when it can be
    loaded, falling back to plain text otherwise; the game-over banner is
    always plain text - there's no "you died" art."""
 
