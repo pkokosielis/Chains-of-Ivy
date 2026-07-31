@@ -889,9 +889,17 @@ class ChainsOfIvyPygameApp:
       y = self._inventoryItemsStartY()
       startY = y
 
-      for item in self.player.inventory:
-         equipped = item is self.player.weapon or item is self.player.helmet \
+      def isEquipped(item):
+         return item is self.player.weapon or item is self.player.helmet \
             or item is self.player.suit or item is self.player.boots
+
+      # self.player.inventory is oldest-first (append order), so reversing
+      # gives most-recently-acquired first; the stable sort then floats
+      # equipped items to the top without disturbing that recency order.
+      orderedItems = sorted(reversed(self.player.inventory), key=lambda it: not isEquipped(it))
+
+      for item in orderedItems:
+         equipped = isEquipped(item)
          useX = x + nameWidth + buttonGap
          dropX = useX + useWidth + buttonGap
          useButton = Button((useX, y, useWidth, rowHeight), "Equipped" if equipped else "Use",
