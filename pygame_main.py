@@ -23,6 +23,7 @@ from pygame_widgets import (
    DropdownMenu,
    TextInput,
    ScrollLog,
+   ScrollFrame,
    Modal,
    ModalStack,
    COLOR_BACKGROUND,
@@ -34,6 +35,8 @@ from pygame_widgets import (
    COLOR_ERROR,
    COLOR_HP_OK,
    COLOR_BUTTON_DISABLED,
+   SCROLLBAR_WIDTH,
+   SCROLLBAR_MARGIN,
    drawWrappedText,
    drawTopAlignedText,
    wrapParagraphs,
@@ -534,7 +537,12 @@ class ChainsOfIvyPygameApp:
 
       self.inventoryPaneRect = pygame.Rect(690, 322, 390, 314)
       self.inventoryButtons = []
-      self.inventoryNameWidth = self.inventoryPaneRect.width - 20 - 92 - 8 - 60 - 8
+      self.inventoryNameWidth = self.inventoryPaneRect.width - 20 - 92 - 8 - 60 - 8 \
+         - SCROLLBAR_WIDTH - SCROLLBAR_MARGIN
+      # Item rows can outnumber the pane's fixed height (a fully-stocked
+      # inventory), so they scroll within a viewport below the equip
+      # slots/divider rather than spilling past the pane's border.
+      self.inventoryScroll = ScrollFrame(self._inventoryViewportRect())
 
       self.adminMenu = DropdownMenu(
          (WINDOW_WIDTH - 110, 14, 90, 34), "Menu",
@@ -842,9 +850,29 @@ class ChainsOfIvyPygameApp:
       as one method so the two never drift apart."""
       return self.inventoryPaneRect.y + 32 + len(EQUIP_SLOTS) * 16 + 16
 
+   def _inventoryViewportRect(self):
+      """Area item rows scroll within: below the title/equip-slots/divider
+      that drawInventoryPane() always renders, down to the pane's bottom
+      edge."""
+      rect = self.inventoryPaneRect
+      top = self._inventoryItemsStartY()
+      return pygame.Rect(rect.x, top, rect.width, rect.bottom - top - 8)
+
+   def _repositionInventoryButtons(self):
+      """Applies the current scroll offset to each row's buttons. Their
+      rects double as both draw position and click target, so this is the
+      one place scrollOffset actually moves anything - called after it
+      changes (refresh, wheel, drag) rather than baked into refreshInventory,
+      which only knows the unscrolled layout."""
+      offset = self.inventoryScroll.scrollOffset
+      for _item, useButton, dropButton, baseY in self.inventoryButtons:
+         useButton.rect.y = baseY - offset
+         dropButton.rect.y = baseY - offset
+
    def refreshInventory(self):
       self.inventoryButtons = []
       if not self.player or not self.player.inventory:
+         self.inventoryScroll.setContentHeight(0)
          return
 
       rowHeight, rowGap = 32, 8
@@ -852,12 +880,14 @@ class ChainsOfIvyPygameApp:
       # "Equipped", not just "Use".
       useWidth, dropWidth, buttonGap = 92, 60, 8
       x = self.inventoryPaneRect.x + 10
-      nameWidth = self.inventoryPaneRect.width - 20 - useWidth - buttonGap - dropWidth - buttonGap
+      nameWidth = self.inventoryPaneRect.width - 20 - useWidth - buttonGap - dropWidth - buttonGap \
+         - SCROLLBAR_WIDTH - SCROLLBAR_MARGIN
       # Stashed for drawInventoryPane(), which clips item-name text (a
       # quest item's name plus its "-> NPC" suffix can otherwise run into
       # the buttons) to exactly this width.
       self.inventoryNameWidth = nameWidth
       y = self._inventoryItemsStartY()
+      startY = y
 
       for item in self.player.inventory:
          equipped = item is self.player.weapon or item is self.player.helmet \
@@ -869,8 +899,12 @@ class ChainsOfIvyPygameApp:
                              enabled=not equipped)
          dropButton = Button((dropX, y, dropWidth, rowHeight), "Drop",
                               on_click=lambda it=item: self.confirmDrop(it))
-         self.inventoryButtons.append((item, useButton, dropButton))
+         self.inventoryButtons.append((item, useButton, dropButton, y))
          y += rowHeight + rowGap
+
+      contentHeight = y - rowGap - startY
+      self.inventoryScroll.setContentHeight(contentHeight)
+      self._repositionInventoryButtons()
 
    def refreshHere(self):
       """Rebuilds the Here pane's rows: one per NPC/storekeeper/monster/item
@@ -1082,9 +1116,14 @@ class ChainsOfIvyPygameApp:
          return
 
       nameFont = getFont(13)
-      nameRect = pygame.Rect(rect.x + 10, 0, self.inventoryNameWidth, 20)
+      viewport = self.inventoryScroll.rect
+      nameRect = pygame.Rect(rect.x + 10, viewport.y, self.inventoryNameWidth, viewport.height)
       previousClip = self.screen.get_clip()
-      for item, useButton, dropButton in self.inventoryButtons:
+      self.screen.set_clip(viewport)
+      for item, useButton, dropButton, _baseY in self.inventoryButtons:
+         if not viewport.colliderect(useButton.rect):
+            continue
+
          # Quest items (still awaiting turn-in) are called out in accent
          # color with who they're for, so carrying one reads as an open
          # task rather than just another line in the pack.
@@ -1095,13 +1134,14 @@ class ChainsOfIvyPygameApp:
 
          nameSurf = nameFont.render(nameText, True, nameColor)
          nameY = useButton.rect.y + (useButton.rect.height - nameSurf.get_height()) // 2
-         nameRect.y = nameY
          self.screen.set_clip(nameRect)
          self.screen.blit(nameSurf, (rect.x + 10, nameY))
-         self.screen.set_clip(previousClip)
+         self.screen.set_clip(viewport)
 
          useButton.draw(self.screen)
          dropButton.draw(self.screen)
+      self.screen.set_clip(previousClip)
+      self.inventoryScroll.draw_scrollbar(self.screen)
 
    def drawDirectionPane(self):
       rect = self.directionPaneRect
@@ -1142,9 +1182,18 @@ class ChainsOfIvyPygameApp:
       self.log.handle_event(event)
       for button in self.directionButtons.values():
          button.handle_event(event)
-      for _item, useButton, dropButton in self.inventoryButtons:
-         useButton.handle_event(event)
-         dropButton.handle_event(event)
+
+      if self.inventoryScroll.handle_event(event):
+         self._repositionInventoryButtons()
+      else:
+         viewport = self.inventoryScroll.rect
+         for _item, useButton, dropButton, _baseY in self.inventoryButtons:
+            for button in (useButton, dropButton):
+               if viewport.colliderect(button.rect):
+                  button.handle_event(event)
+               elif event.type == pygame.MOUSEMOTION:
+                  button.hovered = False
+
       for _label, button, _hpFraction, _hpText in self.hereRows:
          button.handle_event(event)
 

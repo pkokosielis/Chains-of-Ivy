@@ -413,6 +413,87 @@ class ScrollLog:
          pygame.draw.rect(surface, COLOR_ACCENT, thumb, border_radius=4)
 
 
+class ScrollFrame:
+   """Tracks a pixel scrollOffset (0 = top) and draggable scrollbar for a
+   viewport of pixel-positioned child widgets - unlike ScrollLog, which
+   owns and lays out its own text lines, this just does the scroll
+   bookkeeping/scrollbar for content (e.g. buttons) the caller positions
+   and draws itself, offsetting each by .scrollOffset."""
+
+   def __init__(self, rect):
+      self.rect = pygame.Rect(rect)
+      self.scrollOffset = 0
+      self.contentHeight = 0
+      self._dragging = False
+
+   def setContentHeight(self, contentHeight):
+      """Call after the content's size changes (e.g. items added/removed)
+      so maxOffset() - and the clamped scrollOffset - stay correct."""
+      self.contentHeight = contentHeight
+      self.scrollOffset = max(0, min(self.maxOffset(), self.scrollOffset))
+
+   def maxOffset(self):
+      return max(0, self.contentHeight - self.rect.height)
+
+   def _trackRect(self):
+      return pygame.Rect(self.rect.right - SCROLLBAR_WIDTH - SCROLLBAR_MARGIN, self.rect.y + 4,
+                          SCROLLBAR_WIDTH, self.rect.height - 8)
+
+   def _thumbRect(self):
+      track = self._trackRect()
+      maxOffset = self.maxOffset()
+      if maxOffset <= 0:
+         return None
+
+      thumbHeight = max(SCROLLBAR_MIN_THUMB,
+                         int(track.height * self.rect.height / self.contentHeight))
+      travel = track.height - thumbHeight
+      thumbY = track.y + int(travel * self.scrollOffset / maxOffset)
+      return pygame.Rect(track.x, thumbY, track.width, thumbHeight)
+
+   def _setScrollFraction(self, fraction):
+      maxOffset = self.maxOffset()
+      self.scrollOffset = max(0, min(maxOffset, round(maxOffset * fraction)))
+
+   def handle_event(self, event):
+      """Returns True if the event was consumed (offset may have changed) -
+      callers should reposition their content by .scrollOffset afterwards."""
+      if event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
+         maxOffset = self.maxOffset()
+         self.scrollOffset = max(0, min(maxOffset, self.scrollOffset - event.y * 40))
+         return True
+
+      if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+         thumb = self._thumbRect()
+         if thumb is not None and thumb.collidepoint(event.pos):
+            self._dragging = True
+            return True
+         track = self._trackRect()
+         if track.collidepoint(event.pos):
+            fraction = (event.pos[1] - track.y) / track.height
+            self._setScrollFraction(fraction)
+            return True
+
+      elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+         if self._dragging:
+            self._dragging = False
+            return True
+
+      elif event.type == pygame.MOUSEMOTION and self._dragging:
+         track = self._trackRect()
+         fraction = (event.pos[1] - track.y) / max(1, track.height)
+         self._setScrollFraction(fraction)
+         return True
+
+      return False
+
+   def draw_scrollbar(self, surface):
+      if self.maxOffset() <= 0:
+         return
+      pygame.draw.rect(surface, COLOR_BUTTON, self._trackRect(), border_radius=4)
+      pygame.draw.rect(surface, COLOR_ACCENT, self._thumbRect(), border_radius=4)
+
+
 class Modal:
    """Base class for modal dialogs. Subclasses build self.widgets in
    __init__ and call self.dismiss(result) from a button callback; the
