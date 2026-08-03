@@ -140,7 +140,11 @@ class Character:
          iowPrint ("You are now wearing the " + self.boots.getName())
       elif (item.type == "Scroll"):
          self.magic += item.modifier
-         iowPrint (self.getScrollText()) 
+         iowPrint (self.getScrollText())
+         self.inventory.remove(item)
+      elif (item.type == "Tonic"):
+         self.incrementHitPoints(item.modifier)
+         iowPrint ("You feel restored. (+" + str(item.modifier) + " hit points)")
          self.inventory.remove(item)
       else:
          iowPrint ("I don't know how to use the " + item.getName())

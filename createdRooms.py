@@ -80,6 +80,11 @@ iowDebugPrint (debugRooms, RoomArray)
 (getRoomWithID(16)).addStoreKeeperToRoom(cedric)
 (getRoomWithID(18)).addStoreKeeperToRoom(olaff)
 (getRoomWithID(20)).addStoreKeeperToRoom(henriette)
+(getRoomWithID(39)).addStoreKeeperToRoom(cornelia)
+(getRoomWithID(41)).addStoreKeeperToRoom(osric)
+(getRoomWithID(43)).addStoreKeeperToRoom(julien)
+(getRoomWithID(45)).addStoreKeeperToRoom(percival)
+(getRoomWithID(46)).addStoreKeeperToRoom(grieve)
 
 #Monsters
 drunkenLudwig.addItems([dorianCoatOfArms])
